@@ -1,0 +1,1810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Convex Hull — Graham Scan & Jarvis March</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@700;900&family=Exo+2:wght@300;400;600&display=swap');
+:root {
+  --bg:#05090e; --bg2:#0a1220; --panel:#081018;
+  --bdr:#152030; --bhi:#1c3550;
+  --c1:#00ccff; --c2:#ff6030; --c3:#35ff55; --c4:#ff2d8a; --c5:#ffd000; --c6:#aa66ff;
+  --tx:#b8cfe0; --txd:#3d6070; --txb:#e4f0ff;
+  --pd:#2a4a60; --pa:#ffd000; --ph:#35ff55; --pp:#ff2d8a; --pc:#ff6030; --ps:#aa66ff;
+  --mono:'Share Tech Mono',monospace; --disp:'Orbitron',sans-serif; --body:'Exo 2',sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--tx);font-family:var(--body);display:flex;flex-direction:column}
+body::after{content:'';position:fixed;inset:0;z-index:0;background-image:linear-gradient(rgba(0,200,255,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(0,200,255,.018) 1px,transparent 1px);background-size:42px 42px;pointer-events:none}
+body::before{content:'';position:fixed;inset:0;z-index:9500;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.04) 2px,rgba(0,0,0,.04) 4px);pointer-events:none}
+
+/* HEADER */
+header{position:relative;z-index:200;flex-shrink:0;padding:9px 22px;border-bottom:1px solid var(--bhi);background:linear-gradient(90deg,rgba(0,204,255,.07),transparent);display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.logo{font-family:var(--disp);font-size:.95rem;font-weight:900;letter-spacing:4px;color:var(--c1);text-shadow:0 0 20px rgba(0,204,255,.7)}
+.logo span{color:var(--c2)}
+.atabs{display:flex;gap:5px;margin-left:auto}
+.atab{font-family:var(--disp);font-size:.56rem;letter-spacing:2px;padding:6px 14px;border:1px solid var(--bhi);background:transparent;color:var(--txd);cursor:pointer;transition:all .2s;border-radius:2px;}
+.atab.on{background:rgba(0,204,255,.14);color:var(--c1);border-color:var(--c1);box-shadow:0 0 14px rgba(0,204,255,.2)}
+.atab:hover:not(.on){border-color:var(--txd);color:var(--tx)}
+
+/* LAYOUT */
+.app{position:relative;z-index:10;display:flex;flex:1;overflow:hidden;min-height:0}
+.left{width:420px;flex-shrink:0;background:var(--panel);border-right:none;display:flex;flex-direction:column;overflow:hidden;position:relative;z-index:20}
+.lscr{flex:1;overflow-y:scroll;overflow-x:hidden;padding:9px 9px 20px;display:flex;flex-direction:column;gap:8px;position:relative}
+.lscr::-webkit-scrollbar{width:5px}
+.lscr::-webkit-scrollbar-thumb{background:var(--bhi);border-radius:3px}
+.lscr::-webkit-scrollbar-track{background:var(--bg)}
+.right{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;position:relative;z-index:10}
+
+/* RESIZER HANDLES */
+.vresizer{width:5px;flex-shrink:0;background:var(--bhi);cursor:col-resize;position:relative;z-index:30;transition:background .15s;user-select:none}
+.vresizer:hover,.vresizer.dragging{background:var(--c1);box-shadow:0 0 8px rgba(0,204,255,.4)}
+.vresizer::after{content:'⋮';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--txd);font-size:10px;pointer-events:none}
+.hresizer{height:5px;flex-shrink:0;background:var(--bhi);cursor:row-resize;position:relative;z-index:30;transition:background .15s;user-select:none}
+.hresizer:hover,.hresizer.dragging{background:var(--c1);box-shadow:0 0 8px rgba(0,204,255,.4)}
+.hresizer::after{content:'···';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--txd);font-size:10px;pointer-events:none;letter-spacing:2px}
+
+/* SECTION BOX */
+.sbox{border:1px solid var(--bdr);background:var(--bg2);border-radius:2px;overflow:visible;transition:border-color .2s}
+.sbox:hover{border-color:var(--bhi)}
+.stitle{font-family:var(--disp);font-size:.54rem;letter-spacing:3px;color:var(--c1);padding:6px 10px;background:rgba(0,204,255,.05);border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;border-radius:2px 2px 0 0}
+.stitle .dot{width:5px;height:5px;border-radius:50%;background:var(--c1);box-shadow:0 0 7px var(--c1);animation:pd 2s ease-in-out infinite;flex-shrink:0}
+@keyframes pd{0%,100%{opacity:1}50%{opacity:.2}}
+.stitle .arr{margin-left:auto;color:var(--txd);transition:transform .22s;font-size:.68rem}
+.scont{overflow:hidden;transition:max-height .3s cubic-bezier(.4,0,.2,1),opacity .2s;max-height:2000px}
+.scont.col{max-height:0!important;opacity:0}
+
+/* BUTTONS */
+.btn{font-family:var(--mono);font-size:.66rem;padding:6px 12px;border:1px solid var(--bhi);background:rgba(0,204,255,.06);color:var(--c1);cursor:pointer;transition:all .15s;letter-spacing:1px;white-space:nowrap;border-radius:2px;}
+.btn:hover{background:rgba(0,204,255,.16);box-shadow:0 0 10px rgba(0,204,255,.18)}
+.btn:active{transform:scale(.97)}
+.btn.sec{border-color:var(--bhi);color:var(--tx);background:rgba(255,255,255,.04)}
+.btn.sec:hover{background:rgba(255,255,255,.1)}
+.btn.ok{border-color:var(--c3);color:var(--c3);background:rgba(53,255,85,.07)}
+.btn.ok:hover{background:rgba(53,255,85,.16)}
+.btn.dan{border-color:var(--c2);color:var(--c2);background:rgba(255,96,48,.07)}
+.btn.dan:hover{background:rgba(255,96,48,.16)}
+.btn:disabled{opacity:.3;cursor:not-allowed;pointer-events:none}
+.brow{display:flex;gap:5px;flex-wrap:wrap;padding:7px 9px}
+.prow{display:flex;gap:4px;flex-wrap:wrap;padding:3px 9px 7px}
+.pb{font-family:var(--mono);font-size:.59rem;padding:4px 9px;border:1px solid var(--bhi);background:rgba(255,208,0,.05);color:var(--c5);cursor:pointer;transition:all .15s;border-radius:1px}
+.pb:hover{background:rgba(255,208,0,.13)}
+.pb.w{border-color:var(--c4);color:var(--c4);background:rgba(255,45,138,.05)}
+.pb.w:hover{background:rgba(255,45,138,.14)}
+
+/* CONTROLS */
+.cg{padding:7px 9px;display:flex;flex-direction:column;gap:7px}
+.srow{display:flex;align-items:center;justify-content:space-between;font-family:var(--mono);font-size:.66rem;color:var(--txd)}
+.sctr{font-size:.9rem;color:var(--c5);font-family:var(--disp);letter-spacing:2px}
+.sbadge{font-family:var(--mono);font-size:.58rem;padding:2px 9px;border-radius:20px;border:1px solid var(--bhi);color:var(--txd);letter-spacing:1px;transition:all .2s}
+.sbadge.idle{border-color:var(--txd);color:var(--txd)}
+.sbadge.ready{border-color:var(--c5);color:var(--c5)}
+.sbadge.playing{border-color:var(--c3);color:var(--c3);box-shadow:0 0 7px rgba(53,255,85,.2)}
+.sbadge.paused{border-color:var(--c5);color:var(--c5)}
+.sbadge.done{border-color:var(--c1);color:var(--c1);box-shadow:0 0 7px rgba(0,204,255,.2)}
+.slrow{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:.62rem;color:var(--txd)}
+input[type=range]{flex:1;height:3px;-webkit-appearance:none;background:linear-gradient(90deg,var(--c1),var(--c2));border-radius:2px;outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--c1);box-shadow:0 0 7px var(--c1);cursor:pointer}
+.spv{color:var(--c1);font-family:var(--disp);font-size:.6rem;min-width:30px;text-align:right}
+
+/* INPUT */
+.ia{padding:7px 9px 14px;display:flex;flex-direction:column;gap:6px}
+.ia label{font-family:var(--mono);font-size:.59rem;color:var(--txd)}
+.ia textarea{background:var(--bg);border:1px solid var(--bhi);color:var(--tx);font-family:var(--mono);font-size:.62rem;padding:6px;resize:vertical;min-height:52px;outline:none;border-radius:1px;transition:border-color .2s;width:100%}
+.ia textarea:focus{border-color:var(--c1)}
+.hint{font-family:var(--mono);font-size:.54rem;color:var(--txd);line-height:1.4}
+
+/* PSEUDOCODE */
+.pw{padding:5px;max-height:195px;overflow-y:auto;overflow-x:hidden}
+.pw::-webkit-scrollbar{width:3px}
+.pw::-webkit-scrollbar-thumb{background:var(--bhi)}
+.pline{display:flex;gap:8px;padding:2px 5px;border-left:2px solid transparent;transition:background .15s,border-color .15s;cursor:pointer}
+.pline:hover{background:rgba(0,204,255,.06)}
+.pline.hi{background:rgba(0,204,255,.12);border-left-color:var(--c1)}
+.pline .ln{font-family:var(--mono);font-size:.57rem;color:var(--txd);min-width:16px;user-select:none;padding-top:1px}
+.pline .cd{font-family:var(--mono);font-size:.63rem;color:var(--tx);white-space:pre;line-height:1.65}
+.pline.hi .cd{color:var(--c1)}
+.kw{color:var(--c4)} .fn{color:var(--c2)} .cm{color:var(--txd);font-style:italic} .nm{color:var(--c3)}
+
+/* EXPLAIN */
+.ebox{padding:9px 11px;font-size:.7rem;line-height:1.65;color:var(--tx);min-height:56px}
+.ebox .etag{font-family:var(--disp);font-size:.5rem;color:var(--c2);letter-spacing:2px;margin-bottom:3px;display:block}
+.ebox em{color:var(--c1);font-style:normal;font-weight:600}
+.ebox b{color:var(--c5)}
+
+/* COUNTERS */
+.cntg{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto auto;gap:6px;padding:8px 10px 12px}
+.cni{background:var(--bg);border:1px solid var(--bdr);padding:8px 10px;border-radius:1px;transition:border-color .2s,box-shadow .2s;min-height:52px;box-sizing:border-box}
+.cni.bump{border-color:var(--c3);box-shadow:0 0 9px rgba(53,255,85,.18)}
+.cnl{font-family:var(--mono);font-size:.54rem;color:var(--txd);letter-spacing:1px;margin-bottom:2px;display:block}
+.cnv{font-family:var(--disp);font-size:.92rem;color:var(--c3);display:block}
+
+/* HISTORY */
+.hw{overflow-y:auto;max-height:180px}
+.hw::-webkit-scrollbar{width:3px}
+.hw::-webkit-scrollbar-thumb{background:var(--bhi)}
+table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.57rem}
+thead th{background:rgba(0,204,255,.07);color:var(--c1);padding:4px 6px;text-align:left;font-size:.52rem;letter-spacing:1px;border-bottom:1px solid var(--bhi);position:sticky;top:0;z-index:2}
+tbody tr{cursor:pointer;border-bottom:1px solid var(--bdr);transition:background .1s}
+tbody tr:hover{background:rgba(0,204,255,.07)}
+tbody tr.cur{background:rgba(0,204,255,.13)}
+tbody td{padding:3px 6px;color:var(--txd);max-width:88px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+tbody tr.cur td{color:var(--tx)}
+.tp{color:var(--c3)!important} .tpo{color:var(--c2)!important} .td2{color:var(--c1)!important}
+.tpi{color:var(--c4)!important} .tc{color:var(--c5)!important}
+
+/* LEGEND */
+.lg{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:7px 9px}
+.li{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:.59rem;color:var(--txd)}
+.ld{width:9px;height:9px;border-radius:50%;flex-shrink:0;box-shadow:0 0 5px currentColor}
+.ll{width:18px;height:2px;flex-shrink:0}
+
+/* OVERVIEW */
+.ovb{padding:10px 11px;font-size:.69rem;line-height:1.7;color:var(--txd);overflow:hidden;width:100%}
+.ovb svg{max-width:100%;display:block;overflow:hidden}
+.ovb h4{color:var(--c1);font-family:var(--disp);font-size:.6rem;letter-spacing:2px;margin:10px 0 4px}
+.ovb h4:first-child{margin-top:0}
+.ovb p{margin-bottom:6px}
+.ovb em{color:var(--c2);font-style:normal}
+.ovb strong{color:var(--tx)}
+.ws{display:flex;gap:8px;margin-bottom:6px;padding:6px;background:var(--bg);border:1px solid var(--bdr);border-radius:1px}
+.wsn{font-family:var(--disp);font-size:.68rem;color:var(--c1);min-width:20px;padding-top:1px}
+.wst{font-size:.67rem;line-height:1.6;color:var(--txd)}
+.wst em{color:var(--c3);font-style:normal}
+.kcard{border:1px solid var(--bhi);padding:8px 10px;margin:5px 0;border-radius:1px}
+.kcard.b{border-color:var(--c1);background:rgba(0,204,255,.03)}
+.kcard.or{border-color:var(--c2);background:rgba(255,96,48,.03)}
+.kcard.g{border-color:var(--c3);background:rgba(53,255,85,.03)}
+.kcard.p{border-color:var(--c4);background:rgba(255,45,138,.03)}
+.kcard.au{border-color:var(--c5);background:rgba(255,208,0,.03)}
+.kt{font-family:var(--disp);font-size:.54rem;letter-spacing:2px;margin-bottom:3px;text-transform:uppercase}
+.kcard.b .kt{color:var(--c1)} .kcard.or .kt{color:var(--c2)} .kcard.g .kt{color:var(--c3)}
+.kcard.p .kt{color:var(--c4)} .kcard.au .kt{color:var(--c5)}
+.kb{font-size:.66rem;color:var(--txd);line-height:1.55}
+.kb em{color:var(--c1);font-style:normal}
+
+/* VIZ */
+.vh{padding:7px 15px;border-bottom:1px solid var(--bdr);background:var(--panel);flex-shrink:0;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.vtitle{font-family:var(--disp);font-size:.7rem;letter-spacing:3px;color:var(--txb)}
+.vbody{flex:1;display:flex;overflow:hidden;min-height:0;position:relative}
+#vsvg{flex:1;width:100%;height:100%;cursor:crosshair;display:block}
+.vnote{position:absolute;bottom:7px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:.56rem;color:var(--txd);pointer-events:none;white-space:nowrap}
+
+/* BOTTOM TABS */
+.btabs{display:flex;border-top:1px solid var(--bhi);background:var(--panel);flex-shrink:0}
+.btab{flex:1;font-family:var(--disp);font-size:.49rem;letter-spacing:1.5px;padding:8px 4px;border:none;border-right:1px solid var(--bdr);background:transparent;color:var(--txd);cursor:pointer;transition:all .15s;text-align:center;text-transform:uppercase}
+.btab:last-child{border-right:none}
+.btab:hover{background:rgba(0,204,255,.05);color:var(--tx)}
+.btab.on{background:rgba(0,204,255,.09);color:var(--c1);border-bottom:2px solid var(--c1)}
+.bpanel{background:var(--bg2);height:280px;overflow:hidden;flex-shrink:0;min-height:60px}
+.bcon{display:none;height:100%;overflow-y:auto;overflow-x:hidden}
+.bcon::-webkit-scrollbar{width:3px}
+.bcon::-webkit-scrollbar-thumb{background:var(--bhi)}
+.bcon.on{display:block}
+
+/* CLO1 */
+.c1wrap{padding:10px;height:100%;display:flex;gap:10px}
+#c1svg{flex:1;min-width:0}
+.c1side{width:188px;flex-shrink:0;display:flex;flex-direction:column;gap:6px;overflow-y:auto}
+.cxcard{border:1px solid var(--bhi);background:var(--panel);padding:7px 9px;border-radius:1px}
+.cxa{font-family:var(--disp);font-size:.53rem;letter-spacing:2px;margin-bottom:2px}
+.cxa.g{color:var(--c1)} .cxa.j{color:var(--c2)}
+.cxbig{font-family:var(--mono);font-size:.7rem}
+.cxsub{font-family:var(--mono);font-size:.56rem;color:var(--txd)}
+.nsr{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:.59rem;color:var(--txd);padding:5px 10px 0}
+.nsr input{flex:1}
+.nv{color:var(--c5);font-family:var(--disp);font-size:.6rem;min-width:28px}
+
+/* CLO2 */
+.c2wrap{padding:10px;height:100%;display:flex;gap:10px;overflow-y:auto}
+.sortvis{flex:1;display:flex;flex-direction:column;gap:6px}
+.sortvis h4{font-family:var(--disp);font-size:.55rem;letter-spacing:2px;color:var(--c5)}
+.sortdemo{display:flex;gap:3px;align-items:flex-end;height:64px;padding:4px;background:var(--bg);border:1px solid var(--bdr);border-radius:1px}
+.sbar{flex:1;min-width:3px;border-radius:1px 1px 0 0;display:flex;align-items:flex-end;justify-content:center;transition:all .3s}
+.sbar span{font-family:var(--mono);font-size:.48rem;color:var(--bg);padding-bottom:1px}
+.nwarn{background:rgba(255,45,138,.08);border:1px solid var(--c4);padding:7px 9px;border-radius:1px;font-size:.67rem;color:var(--c4);line-height:1.55}
+.nwarn b{color:var(--c4)}
+.sortside{width:155px;flex-shrink:0;display:flex;flex-direction:column;gap:6px}
+.sic{border:1px solid var(--bhi);padding:7px 9px;border-radius:1px}
+.sit{font-family:var(--disp);font-size:.53rem;letter-spacing:2px;color:var(--c5);margin-bottom:3px}
+.sib{font-size:.64rem;color:var(--txd);line-height:1.5}
+.sib em{color:var(--c1);font-style:normal}
+
+/* CLO3 */
+.c3wrap{padding:10px;height:100%;display:flex;gap:9px;overflow-y:auto}
+.pblock{flex:1;border:1px solid var(--bhi);padding:9px;border-radius:1px}
+.ptitle{font-family:var(--disp);font-size:.55rem;letter-spacing:2px;margin-bottom:6px;padding-bottom:5px;border-bottom:1px solid var(--bdr);text-transform:uppercase}
+.ptitle.gr{color:var(--c3)} .ptitle.so{color:var(--c5)} .ptitle.wr{color:var(--c4)}
+.pbody{font-size:.66rem;color:var(--txd);line-height:1.6}
+.pbody em{color:var(--c1);font-style:normal}
+.pbody b{color:var(--tx)}
+.gsteps{margin-top:6px;display:flex;flex-direction:column;gap:3px}
+.gsi{display:flex;align-items:center;gap:6px;padding:3px 7px;border:1px solid var(--bdr);border-radius:1px;font-family:var(--mono);font-size:.59rem;color:var(--txd)}
+.gsn{font-family:var(--disp);font-size:.56rem;color:var(--c1);min-width:16px}
+
+/* KEY IDEAS */
+.kiw{padding:9px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;overflow-y:auto;align-content:start}
+
+/* SVG ANIMATIONS */
+@keyframes fadeIn  { from{opacity:0;transform:scale(.5)} to{opacity:1;transform:scale(1)} }
+@keyframes popIn   { 0%{opacity:0} 60%{opacity:1;transform:scale(1.3)} 100%{transform:scale(1)} }
+@keyframes pulse   { 0%,100%{opacity:1} 50%{opacity:.5} }
+@keyframes dashMov { to{stroke-dashoffset:-20} }
+@keyframes drawEdge{ from{stroke-dashoffset:2000} to{stroke-dashoffset:0} }
+.sv-fade { animation:fadeIn .22s ease-out both; }
+.sv-pop  { animation:popIn .25s cubic-bezier(.17,.67,.35,1.5) both; }
+.sv-puls { animation:pulse .85s ease-in-out infinite; }
+.sv-dash { animation:dashMov .5s linear infinite; }
+.sv-draw { animation:drawEdge .3s ease-out both; stroke-dasharray:2000; }
+
+/* TOOLTIP */
+.tooltip{position:fixed;z-index:99999;display:none;pointer-events:none;background:rgba(5,9,14,.97);border:1px solid var(--c1);color:var(--tx);font-family:var(--body);font-size:.67rem;padding:7px 11px;border-radius:2px;max-width:210px;box-shadow:0 0 18px rgba(0,204,255,.18);line-height:1.5}
+
+/* RESPONSIVE */
+@media(max-width:980px){
+  html,body{height:auto;overflow:auto}
+  .app{flex-direction:column;overflow:visible;height:auto}
+  .left{width:100%;height:auto;overflow:visible}
+  .lscr{overflow:visible;max-height:none}
+  .right{height:660px}
+  .pw{max-height:140px}
+  .c1wrap,.c2wrap,.c3wrap{flex-direction:column}
+  .c1side,.sortside{width:100%}
+  .kiw{grid-template-columns:1fr 1fr}
+}
+@media(max-width:600px){
+  .btabs{flex-wrap:wrap}
+  .btab{flex:none;width:50%}
+  .lg{grid-template-columns:1fr}
+  .kiw{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="tooltip" id="tt"></div>
+<header>
+  <div class="logo">CONVEX<span>HULL</span></div>
+  <div style="font-family:var(--mono);font-size:.58rem;color:var(--txd)">Graham Scan &amp; Jarvis March</div>
+  <div class="atabs">
+    <button class="atab on" id="tg">GRAHAM SCAN</button>
+    <button class="atab"    id="tj">JARVIS MARCH</button>
+  </div>
+</header>
+<div class="app">
+  <!-- LEFT -->
+  <div class="left">
+  <div class="lscr">
+
+    <div class="sbox">
+      <div class="stitle" data-sec="controls"><div class="dot"></div>CONTROLS<span class="arr">▾</span></div>
+      <div class="scont">
+        <div class="cg">
+          <!-- Row 1: all 5 buttons in one row -->
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:4px;padding:7px 9px 0">
+            <button class="btn" id="bbs" style="font-size:.58rem;padding:6px 4px;text-align:center">⚡ BUILD</button>
+            <button class="btn sec" id="bst" style="font-size:.58rem;padding:6px 4px;text-align:center">STEP ▶</button>
+            <button class="btn ok"  id="bpl" style="font-size:.58rem;padding:6px 4px;text-align:center">▶ PLAY</button>
+            <button class="btn sec" id="bpa" style="font-size:.58rem;padding:6px 4px;text-align:center">⏸ PAUSE</button>
+            <button class="btn dan" id="brs" style="font-size:.58rem;padding:6px 4px;text-align:center">↺ RESET</button>
+          </div>
+          <!-- Row 2: step counter + status -->
+          <div class="srow" style="padding:4px 9px 0">
+            <span style="display:flex;align-items:center;gap:8px;font-size:.66rem">STEP&nbsp;<span class="sctr" id="sctr">0 / 0</span></span>
+            <span class="sbadge idle" id="sbg">IDLE</span>
+          </div>
+          <!-- Row 3: speed slider -->
+          <div class="slrow" style="padding:4px 9px 7px">
+            <label>SPEED</label>
+            <input type="range" id="spsl" min="0.25" max="4" step="0.25" value="1">
+            <span class="spv" id="spv">1x</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sbox">
+      <div class="stitle"><div class="dot"></div>INPUT / PRESETS<span class="arr">▾</span></div>
+      <div class="scont">
+        <div class="prow">
+          <button class="pb" data-pre="random">⟐ RANDOM</button>
+          <button class="pb" data-pre="circle">○ CIRCLE</button>
+          <button class="pb" data-pre="grid">⊞ GRID</button>
+          <button class="pb" data-pre="tri">△ TRIANGLE</button>
+          <button class="pb" data-pre="star">★ STAR</button>
+          <button class="pb w" data-pre="wg">⚠ WORST-G</button>
+          <button class="pb w" data-pre="wj">⚠ WORST-J</button>
+        </div>
+        <div class="ia">
+          <label>CUSTOM POINTS (x,y pairs):</label>
+          <textarea id="ctin" placeholder="e.g.  1,5  3,4  6,5  2,1  4,2"></textarea>
+          <div class="hint">⚠ Need ≥ 3 points · any numbers work, auto-scaled to canvas · or click canvas directly</div>
+          <button class="btn" id="bac" style="margin-top:4px;width:100%">APPLY CUSTOM</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="sbox">
+      <div class="stitle"><div class="dot"></div>PSEUDOCODE<span class="arr">▾</span></div>
+      <div class="scont"><div class="pw" id="pw"></div></div>
+    </div>
+
+    <div class="sbox">
+      <div class="stitle"><div class="dot"></div>STEP EXPLANATION<span class="arr">▾</span></div>
+      <div class="scont">
+        <div class="ebox" id="ebox">
+          <span class="etag">IDLE</span>Select a preset or add points, then click <em>BUILD STEPS</em>.
+        </div>
+      </div>
+    </div>
+
+    <div class="sbox">
+      <div class="stitle"><div class="dot"></div>OPERATION COUNTERS<span class="arr">▾</span></div>
+      <div class="scont">
+        <div style="padding:5px 10px 3px;font-family:var(--mono);font-size:.58rem;color:var(--txd)">
+          📊 These update live as the algorithm runs — watch them change with each step!
+        </div>
+        <div class="cntg">
+          <div class="cni" id="cc">
+            <div class="cnl">🔍 COMPARISONS</div>
+            <div class="cnv" id="vc">0</div>
+            <div style="font-family:var(--mono);font-size:.52rem;color:var(--txd);margin-top:2px;line-height:1.4">How many times we used cross product to compare points. This drives O(n log n) / O(nh).</div>
+          </div>
+          <div class="cni" id="ch">
+            <div class="cnl">🔷 HULL POINTS</div>
+            <div class="cnv" id="vh">0</div>
+            <div style="font-family:var(--mono);font-size:.52rem;color:var(--txd);margin-top:2px;line-height:1.4">Points confirmed on the convex hull so far. Final value = h (hull size).</div>
+          </div>
+          <div class="cni" id="cs">
+            <div class="cnl">📦 STACK OPS</div>
+            <div class="cnv" id="vs">0</div>
+            <div style="font-family:var(--mono);font-size:.52rem;color:var(--txd);margin-top:2px;line-height:1.4">Graham only: total push + pop operations on the stack. Each point is pushed/popped at most once → O(n).</div>
+          </div>
+          <div class="cni" id="ci">
+            <div class="cnl">🔁 ITERATIONS</div>
+            <div class="cnv" id="vi">0</div>
+            <div style="font-family:var(--mono);font-size:.52rem;color:var(--txd);margin-top:2px;line-height:1.4">How many main loop iterations have run. Graham: n−1 sorted pts. Jarvis: h hull rounds.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sbox">
+      <div class="stitle"><div class="dot"></div>STEP HISTORY<span class="arr">▾</span></div>
+      <div class="scont">
+        <div class="hw" id="hw">
+          <table><thead><tr><th>#</th><th>TYPE</th><th>DETAIL</th><th>H</th></tr></thead>
+          <tbody id="hb"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <div class="sbox">
+      <div class="stitle"><div class="dot"></div>LEGEND<span class="arr">▾</span></div>
+      <div class="scont">
+        <div class="lg">
+          <div class="li"><div class="ld" style="background:var(--pd);color:var(--pd)"></div>UNVISITED</div>
+          <div class="li"><div class="ld" style="background:var(--pa);color:var(--c5)"></div>ACTIVE</div>
+          <div class="li"><div class="ld" style="background:var(--pp);color:var(--c4)"></div>PIVOT/ANCHOR</div>
+          <div class="li"><div class="ld" style="background:var(--pc);color:var(--c2)"></div>CANDIDATE</div>
+          <div class="li"><div class="ld" style="background:var(--ph);color:var(--c3)"></div>HULL POINT</div>
+          <div class="li"><div class="ld" style="background:var(--ps);color:var(--c6)"></div>SORTED</div>
+          <div class="li"><div class="ll" style="background:var(--c1)"></div>HULL EDGE</div>
+          <div class="li"><div class="ll" style="background:var(--c2);opacity:.5"></div>CHECK LINE</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  </div>
+
+  <div class="vresizer" id="vres" title="Drag to resize panels"></div>
+
+  <!-- RIGHT -->
+  <div class="right">
+    <div class="vh">
+      <div class="vtitle" id="vtitle">GRAHAM SCAN</div>
+      <div style="margin-left:auto;font-family:var(--mono);font-size:.59rem;color:var(--txd)">
+        <span id="npts">0</span> PTS · CLICK CANVAS TO ADD
+      </div>
+    </div>
+    <div class="vbody">
+      <svg id="vsvg" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div class="vnote" id="vnote">Load a preset or click to add points → BUILD STEPS</div>
+    </div>
+    <div class="hresizer" id="hres" title="Drag to resize bottom panel"></div>
+    <div class="btabs">
+      <button class="btab" data-tab="clo1">CLO-1: COMPLEXITY</button>
+      <button class="btab"    data-tab="clo2">CLO-2: SORTING</button>
+      <button class="btab"    data-tab="clo3">CLO-3: PARADIGM</button>
+      <button class="btab"    data-tab="keys">KEY IDEAS</button>
+      <button class="btab"    data-tab="overview">📖 OVERVIEW</button>
+    </div>
+    <div class="bpanel">
+      <div class="bcon" id="bc-clo1">
+        <!-- Title -->
+        <div style="padding:8px 12px 4px;font-family:var(--disp);font-size:.6rem;letter-spacing:2px;color:var(--c5)">
+          📊 CLO-1: COMPLEXITY ANALYSIS — How fast do these algorithms grow?
+        </div>
+        <!-- Top row: chart + complexity table -->
+        <div style="display:flex;gap:10px;padding:0 10px 6px;height:calc(100% - 32px);min-height:0">
+          <!-- Chart area -->
+          <div style="flex:1;display:flex;flex-direction:column;gap:5px;min-width:0">
+            <!-- n slider -->
+            <div style="display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:.59rem;color:var(--txd)">
+              <span>📌 Set n =</span>
+              <input type="range" id="nsl" min="5" max="200" step="5" value="30" style="flex:1">
+              <span class="nv" id="nv" style="color:var(--c5);font-family:var(--disp);font-size:.62rem;min-width:28px">30</span>
+              <span style="color:var(--txd);font-size:.55rem">← drag to explore</span>
+            </div>
+            <!-- Actual dot info -->
+            <div id="actual-info" style="font-family:var(--mono);font-size:.6rem;padding:4px 7px;background:var(--bg);border:1px solid var(--bhi);border-radius:1px;display:none">
+              <span style="color:var(--c5)">★ YOUR RUN:</span>
+              <span id="actual-text" style="color:var(--tx)"></span>
+              <span style="color:var(--txd);margin-left:6px">← shown as ★ on chart</span>
+            </div>
+            <div id="no-run-info" style="font-family:var(--mono);font-size:.6rem;padding:4px 7px;background:var(--bg);border:1px solid var(--bdr);border-radius:1px;color:var(--txd)">
+              💡 Run an algorithm first (click PLAY), then come back here to see your actual operation count plotted on the chart!
+            </div>
+            <svg id="c1svg" xmlns="http://www.w3.org/2000/svg" style="flex:1"></svg>
+          </div>
+          <!-- Right side: complexity cards -->
+          <div style="width:195px;flex-shrink:0;display:flex;flex-direction:column;gap:5px;overflow-y:auto">
+            <!-- Best/Avg/Worst table -->
+            <div style="border:1px solid var(--bhi);background:var(--panel);padding:7px 9px;border-radius:1px">
+              <div style="font-family:var(--disp);font-size:.54rem;letter-spacing:2px;color:var(--c5);margin-bottom:5px">⏱ TIME COMPLEXITY</div>
+              <table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.58rem">
+                <tr style="border-bottom:1px solid var(--bdr)">
+                  <td style="padding:2px 4px;color:var(--txd)">Case</td>
+                  <td style="padding:2px 4px;color:var(--c1)">Graham</td>
+                  <td style="padding:2px 4px;color:var(--c2)">Jarvis</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--bdr)">
+                  <td style="padding:3px 4px;color:var(--c3)">Best</td>
+                  <td style="padding:3px 4px;color:var(--tx)">O(n log n)</td>
+                  <td style="padding:3px 4px;color:var(--tx)">O(n)</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--bdr)">
+                  <td style="padding:3px 4px;color:var(--c5)">Average</td>
+                  <td style="padding:3px 4px;color:var(--tx)">O(n log n)</td>
+                  <td style="padding:3px 4px;color:var(--tx)">O(n√n)</td>
+                </tr>
+                <tr>
+                  <td style="padding:3px 4px;color:var(--c4)">Worst</td>
+                  <td style="padding:3px 4px;color:var(--tx)">O(n log n)</td>
+                  <td style="padding:3px 4px;color:var(--tx)">O(n²)</td>
+                </tr>
+              </table>
+              <div style="margin-top:5px;font-family:var(--mono);font-size:.55rem;color:var(--txd);line-height:1.5">
+                Space: Graham <span style="color:var(--c1)">O(n)</span> · Jarvis <span style="color:var(--c2)">O(h)</span>
+              </div>
+            </div>
+            <!-- Graham card -->
+            <div style="border:1px solid var(--c1);background:rgba(0,204,255,.04);padding:7px 9px;border-radius:1px">
+              <div style="font-family:var(--disp);font-size:.53rem;letter-spacing:2px;color:var(--c1);margin-bottom:3px">GRAHAM SCAN</div>
+              <div style="font-family:var(--mono);font-size:.7rem;color:var(--c1)">O(n log n)</div>
+              <div style="font-family:var(--mono);font-size:.56rem;color:var(--txd);margin-top:2px">Always — sort dominates</div>
+            </div>
+            <!-- Jarvis card -->
+            <div style="border:1px solid var(--c2);background:rgba(255,96,48,.04);padding:7px 9px;border-radius:1px">
+              <div style="font-family:var(--disp);font-size:.53rem;letter-spacing:2px;color:var(--c2);margin-bottom:3px">JARVIS MARCH</div>
+              <div style="font-family:var(--mono);font-size:.7rem;color:var(--c2)">O(nh)</div>
+              <div style="font-family:var(--mono);font-size:.56rem;color:var(--txd);margin-top:2px">h = number of hull pts</div>
+            </div>
+            <!-- Winner card -->
+            <div style="border:1px solid var(--c5);background:rgba(255,208,0,.04);padding:7px 9px;border-radius:1px">
+              <div style="font-family:var(--disp);font-size:.53rem;letter-spacing:2px;color:var(--c5);margin-bottom:3px">🏆 WHEN FASTER?</div>
+              <div style="font-family:var(--mono);font-size:.56rem;color:var(--tx);line-height:1.55">
+                <span style="color:var(--c2)">Jarvis</span> wins: h ≪ n<br>
+                <span style="color:var(--c1)">Graham</span> wins: h ≈ n<br>
+                Cross-over: h ≈ log n
+              </div>
+            </div>
+            <!-- Try worst case -->
+            <div style="border:1px solid var(--c4);background:rgba(255,45,138,.04);padding:7px 9px;border-radius:1px">
+              <div style="font-family:var(--disp);font-size:.53rem;letter-spacing:2px;color:var(--c4);margin-bottom:3px">⚠ WORST CASES</div>
+              <div style="font-family:var(--mono);font-size:.56rem;color:var(--tx);line-height:1.55">
+                Graham worst: all pts on hull → still O(n log n)<br><br>
+                Jarvis worst: all pts on hull → O(n²)!<br>
+                <span style="color:var(--txd)">Try the ⚠ WORST-J preset to see this!</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="bcon" id="bc-clo2">
+        <div style="padding:8px 12px 4px;font-family:var(--disp);font-size:.6rem;letter-spacing:2px;color:var(--c5)">
+          🔃 CLO-2: SORTING &amp; SEARCHING — How each algorithm finds the hull
+        </div>
+        <div style="display:flex;gap:10px;padding:0 10px 8px;height:calc(100% - 30px);overflow-y:auto">
+
+          <!-- Graham Sort Column -->
+          <div style="flex:1;display:flex;flex-direction:column;gap:6px;min-width:0">
+            <div style="font-family:var(--disp);font-size:.56rem;letter-spacing:2px;color:var(--c1);padding:4px 0;border-bottom:1px solid var(--bhi)">📐 GRAHAM SCAN — USES SORTING</div>
+
+            <div style="background:rgba(0,204,255,.06);border:1px solid var(--c1);padding:7px 9px;border-radius:1px;font-size:.67rem;color:var(--tx);line-height:1.6">
+              <b style="color:var(--c1)">Step 1 — Find anchor (O(n)):</b><br>
+              Scan all points for the lowest-y point. This is the starting point — guaranteed to be on the hull.
+            </div>
+            <div style="background:rgba(255,208,0,.06);border:1px solid var(--c5);padding:7px 9px;border-radius:1px;font-size:.67rem;color:var(--tx);line-height:1.6">
+              <b style="color:var(--c5)">Step 2 — Polar angle SORT (O(n log n)):</b><br>
+              Sort all other points by angle from the anchor going counterclockwise. Uses <em style="color:var(--c3)">cross products</em> instead of slow trigonometry.<br>
+              <span style="color:var(--c4);font-size:.63rem">⚠ This sort is ESSENTIAL — without it the algorithm produces wrong results!</span>
+            </div>
+            <div style="background:rgba(53,255,85,.06);border:1px solid var(--c3);padding:7px 9px;border-radius:1px;font-size:.67rem;color:var(--tx);line-height:1.6">
+              <b style="color:var(--c3)">Step 3 — Stack sweep (O(n)):</b><br>
+              Process sorted points one by one. Because they're sorted, each cross product check is final — no need to revisit. Total sweep is O(n).
+            </div>
+
+            <!-- Polar angle bar chart -->
+            <div style="font-family:var(--mono);font-size:.59rem;color:var(--txd);margin-top:2px">
+              📊 Polar angles of your current points (sorted left → right = CCW order):
+            </div>
+            <div class="sortdemo" id="sdd" style="height:55px"></div>
+            <div style="font-family:var(--mono);font-size:.57rem;color:var(--txd)">
+              <span style="color:var(--c4)">■</span> Anchor (pivot) &nbsp;
+              <span style="color:var(--c3)">■</span> Sorted CCW order — each bar = one point's angle
+            </div>
+
+            <div style="background:rgba(255,45,138,.07);border:1px solid var(--c4);padding:7px 9px;border-radius:1px;font-size:.66rem;color:var(--c4);line-height:1.55">
+              <b>❌ What if we SKIP the sort?</b><br>
+              <span style="color:var(--tx)">The stack would process points in random order. It can't tell if a turn is locally or globally valid — it would keep wrong points and miss correct ones, producing a <b style="color:var(--c4)">self-intersecting polygon</b> instead of a convex hull.</span>
+            </div>
+          </div>
+
+          <!-- Jarvis Search Column -->
+          <div style="flex:1;display:flex;flex-direction:column;gap:6px;min-width:0">
+            <div style="font-family:var(--disp);font-size:.56rem;letter-spacing:2px;color:var(--c2);padding:4px 0;border-bottom:1px solid var(--c2)">🎁 JARVIS MARCH — USES SEARCHING</div>
+
+            <div style="background:rgba(255,96,48,.06);border:1px solid var(--c2);padding:7px 9px;border-radius:1px;font-size:.67rem;color:var(--tx);line-height:1.6">
+              <b style="color:var(--c2)">No sorting needed!</b><br>
+              Instead of sorting upfront, Jarvis does a <em style="color:var(--c5)">linear search</em> for the best next point at every single step.
+            </div>
+            <div style="background:rgba(255,96,48,.06);border:1px solid var(--c2);padding:7px 9px;border-radius:1px;font-size:.67rem;color:var(--tx);line-height:1.6">
+              <b style="color:var(--c2)">Each round — O(n) linear search:</b><br>
+              From the current hull point, scan ALL n points and find the one most counterclockwise. This is the search step — it runs h times total (once per hull vertex).
+            </div>
+            <div style="background:rgba(255,96,48,.06);border:1px solid var(--c2);padding:7px 9px;border-radius:1px;font-size:.67rem;color:var(--tx);line-height:1.6">
+              <b style="color:var(--c2)">Total cost = O(n × h):</b><br>
+              n = total points scanned per round<br>
+              h = number of hull vertices found<br>
+              When h is small (like 3), this is only 3n — much faster than Graham's n log n!
+            </div>
+
+            <!-- Comparison table -->
+            <div style="border:1px solid var(--bhi);background:var(--panel);padding:7px 9px;border-radius:1px;margin-top:2px">
+              <div style="font-family:var(--disp);font-size:.54rem;letter-spacing:2px;color:var(--c5);margin-bottom:5px">⚖️ SORT vs SEARCH — SIDE BY SIDE</div>
+              <table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.59rem">
+                <tr style="border-bottom:1px solid var(--bdr)">
+                  <td style="padding:2px 4px;color:var(--txd)"></td>
+                  <td style="padding:2px 4px;color:var(--c1)">Graham</td>
+                  <td style="padding:2px 4px;color:var(--c2)">Jarvis</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--bdr)">
+                  <td style="padding:3px 4px;color:var(--txd)">Technique</td>
+                  <td style="padding:3px 4px;color:var(--tx)">Polar sort</td>
+                  <td style="padding:3px 4px;color:var(--tx)">Linear search</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--bdr)">
+                  <td style="padding:3px 4px;color:var(--txd)">When done</td>
+                  <td style="padding:3px 4px;color:var(--tx)">Once upfront</td>
+                  <td style="padding:3px 4px;color:var(--tx)">Every hull step</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--bdr)">
+                  <td style="padding:3px 4px;color:var(--txd)">Cost</td>
+                  <td style="padding:3px 4px;color:var(--tx)">O(n log n)</td>
+                  <td style="padding:3px 4px;color:var(--tx)">O(n) × h</td>
+                </tr>
+                <tr>
+                  <td style="padding:3px 4px;color:var(--txd)">Best for</td>
+                  <td style="padding:3px 4px;color:var(--tx)">h ≈ n</td>
+                  <td style="padding:3px 4px;color:var(--tx)">h ≪ n</td>
+                </tr>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="bcon" id="bc-clo3">
+        <div style="padding:8px 12px 4px;font-family:var(--disp);font-size:.6rem;letter-spacing:2px;color:var(--c5)">
+          🧠 CLO-3: DESIGN PARADIGM — How these algorithms are designed
+        </div>
+        <div style="display:flex;gap:10px;padding:0 10px 8px;height:calc(100% - 30px);overflow-y:auto">
+
+          <!-- Jarvis = Greedy -->
+          <div style="flex:1;display:flex;flex-direction:column;gap:6px;min-width:0">
+            <div style="font-family:var(--disp);font-size:.56rem;letter-spacing:2px;color:var(--c3);padding:4px 6px;border:1px solid var(--c3);background:rgba(53,255,85,.07);border-radius:1px;text-align:center">
+              🎁 JARVIS MARCH = GREEDY ALGORITHM
+            </div>
+            <div style="background:var(--panel);border:1px solid var(--bhi);padding:8px 9px;border-radius:1px;font-size:.67rem;color:var(--tx);line-height:1.65">
+              <b style="color:var(--c3)">What is Greedy?</b><br>
+              A greedy algorithm makes the <em style="color:var(--c5)">best choice available right now</em> at each step, without looking ahead or going back. It never reconsiders a decision.
+            </div>
+            <div style="background:var(--panel);border:1px solid var(--c3);padding:8px 9px;border-radius:1px;font-size:.67rem;color:var(--tx);line-height:1.65">
+              <b style="color:var(--c3)">Jarvis greedy choice:</b><br>
+              "From where I am now, which point is the most counterclockwise?" — pick it, add it to the hull, never go back.
+            </div>
+            <!-- Animated greedy steps -->
+            <div style="border:1px solid var(--bhi);background:var(--panel);padding:7px 9px;border-radius:1px">
+              <div style="font-family:var(--disp);font-size:.53rem;letter-spacing:2px;color:var(--c3);margin-bottom:5px">🔄 GREEDY STEPS — WATCH DURING JARVIS:</div>
+              <div style="display:flex;flex-direction:column;gap:3px">
+                <div style="display:flex;align-items:center;gap:7px;padding:4px 7px;border:1px solid var(--c4);background:rgba(255,45,138,.06);border-radius:1px;font-family:var(--mono);font-size:.6rem;color:var(--c4)">
+                  <span style="font-family:var(--disp);font-size:.58rem;color:var(--c1);min-width:18px">1</span>
+                  Start at leftmost point (anchor) — guaranteed on hull
+                </div>
+                <div style="display:flex;align-items:center;gap:7px;padding:4px 7px;border:1px solid var(--c2);background:rgba(255,96,48,.06);border-radius:1px;font-family:var(--mono);font-size:.6rem;color:var(--c2)">
+                  <span style="font-family:var(--disp);font-size:.58rem;color:var(--c1);min-width:18px">2</span>
+                  Scan ALL points — find most CCW (the greedy scan)
+                </div>
+                <div style="display:flex;align-items:center;gap:7px;padding:4px 7px;border:1px solid var(--c5);background:rgba(255,208,0,.06);border-radius:1px;font-family:var(--mono);font-size:.6rem;color:var(--c5)">
+                  <span style="font-family:var(--disp);font-size:.58rem;color:var(--c1);min-width:18px">3</span>
+                  Commit! Add that point to hull — no going back ✓
+                </div>
+                <div style="display:flex;align-items:center;gap:7px;padding:4px 7px;border:1px solid var(--c3);background:rgba(53,255,85,.06);border-radius:1px;font-family:var(--mono);font-size:.6rem;color:var(--c3)">
+                  <span style="font-family:var(--disp);font-size:.58rem;color:var(--c1);min-width:18px">4</span>
+                  Repeat from new point until back at start
+                </div>
+              </div>
+            </div>
+            <div style="background:rgba(53,255,85,.05);border:1px solid var(--c3);padding:7px 9px;border-radius:1px;font-size:.66rem;color:var(--tx);line-height:1.55">
+              <b style="color:var(--c3)">Why greedy is CORRECT here:</b><br>
+              The most-CCW point from any hull vertex is <em style="color:var(--c5)">always</em> the correct next hull vertex. No future information can make a different choice better. This is called the <b>greedy choice property</b>.
+            </div>
+          </div>
+
+          <!-- Graham = Sort + Sweep -->
+          <div style="flex:1;display:flex;flex-direction:column;gap:6px;min-width:0">
+            <div style="font-family:var(--disp);font-size:.56rem;letter-spacing:2px;color:var(--c5);padding:4px 6px;border:1px solid var(--c5);background:rgba(255,208,0,.07);border-radius:1px;text-align:center">
+              ⚡ GRAHAM SCAN = SORT + SWEEP PARADIGM
+            </div>
+            <div style="background:var(--panel);border:1px solid var(--bhi);padding:8px 9px;border-radius:1px;font-size:.67rem;color:var(--tx);line-height:1.65">
+              <b style="color:var(--c5)">What is Sort + Sweep?</b><br>
+              Spend time upfront organizing data (sort), then solve the problem in one fast pass (sweep). The sort makes each sweep decision O(1) instead of O(n).
+            </div>
+            <div style="border:1px solid var(--bhi);background:var(--panel);padding:7px 9px;border-radius:1px">
+              <div style="font-family:var(--disp);font-size:.53rem;letter-spacing:2px;color:var(--c5);margin-bottom:5px">📋 STACK INVARIANT — WATCH DURING GRAHAM:</div>
+              <div style="display:flex;flex-direction:column;gap:3px">
+                <div style="display:flex;align-items:center;gap:7px;padding:4px 7px;border:1px solid var(--c4);background:rgba(255,45,138,.06);border-radius:1px;font-family:var(--mono);font-size:.6rem;color:var(--c4)">
+                  <span style="font-family:var(--disp);font-size:.58rem;color:var(--c1);min-width:18px">1</span>
+                  Sort by polar angle — one-time O(n log n) investment
+                </div>
+                <div style="display:flex;align-items:center;gap:7px;padding:4px 7px;border:1px solid var(--c2);background:rgba(255,96,48,.06);border-radius:1px;font-family:var(--mono);font-size:.6rem;color:var(--c2)">
+                  <span style="font-family:var(--disp);font-size:.58rem;color:var(--c1);min-width:18px">2</span>
+                  For each point: cross product test → LEFT = push ✓
+                </div>
+                <div style="display:flex;align-items:center;gap:7px;padding:4px 7px;border:1px solid var(--c4);background:rgba(255,45,138,.06);border-radius:1px;font-family:var(--mono);font-size:.6rem;color:var(--c4)">
+                  <span style="font-family:var(--disp);font-size:.58rem;color:var(--c1);min-width:18px">3</span>
+                  RIGHT turn = POP — stack always stays convex
+                </div>
+                <div style="display:flex;align-items:center;gap:7px;padding:4px 7px;border:1px solid var(--c3);background:rgba(53,255,85,.06);border-radius:1px;font-family:var(--mono);font-size:.6rem;color:var(--c3)">
+                  <span style="font-family:var(--disp);font-size:.58rem;color:var(--c1);min-width:18px">4</span>
+                  Stack at end = complete convex hull ✓
+                </div>
+              </div>
+            </div>
+            <div style="background:rgba(255,45,138,.06);border:1px solid var(--c4);padding:7px 9px;border-radius:1px;font-size:.66rem;color:var(--tx);line-height:1.55">
+              <b style="color:var(--c4)">❌ Why NOT Divide &amp; Conquer or DP?</b><br>
+              <b>D&amp;C</b> (merge hull): splits points, solves halves, merges — works but more complex code and higher constant factor.<br>
+              <b>DP</b>: no overlapping subproblems exist here — each hull decision is independent — so DP doesn't apply.<br>
+              <b style="color:var(--c4)">Wrong greedy example:</b> picking the <em>nearest</em> point each time gives a wrong answer — it misses far-out hull vertices entirely.
+            </div>
+          </div>
+
+        </div>
+      </div>
+      <div class="bcon" id="bc-keys">
+        <div class="kiw">
+          <div class="kcard b"><div class="kt">Convex Hull</div><div class="kb">Smallest convex polygon enclosing all input points. Like a rubber band stretched around all points and released.</div></div>
+          <div class="kcard or"><div class="kt">Cross Product</div><div class="kb">cross(O,A,B)=(A-O)×(B-O). <em>Positive</em>=left/CCW. Negative=right/CW. Zero=collinear. No trig needed.</div></div>
+          <div class="kcard g"><div class="kt">Output Sensitive</div><div class="kb">Jarvis is <em>output-sensitive</em>: O(nh). For 3 hull pts among 1000 → 3000 ops. Graham always O(n log n).</div></div>
+          <div class="kcard p"><div class="kt">Anchor Point</div><div class="kb">Both start from <em>lowest-leftmost</em> point — guaranteed on hull. Graham sorts from it; Jarvis wraps from it.</div></div>
+          <div class="kcard au"><div class="kt">Stack Invariant</div><div class="kb">Graham's stack always holds a valid convex chain. Pop right/collinear turns to <em>restore convexity</em> before pushing.</div></div>
+          <div class="kcard b"><div class="kt">Polar Angle Sort</div><div class="kb">Sorting by <em>atan2(dy,dx)</em> from pivot gives CCW order. Enables single-pass O(n) sweep with O(1) stack ops.</div></div>
+        </div>
+      </div>
+      <!-- OVERVIEW -->
+      <div class="bcon" id="bc-overview">
+        <div class="ovb" id="ovb" style="padding:12px 16px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+'use strict';
+
+// ── STATE ──────────────────────────────────────────────────────
+let algo  = 'graham';
+let pts   = [];
+let steps = [];
+let cur   = -1;
+let playing = false;
+let timer   = null;
+let speed   = 1;
+const PAD   = 50;
+let SW = 600, SH = 400;
+
+// ── PSEUDOCODE ─────────────────────────────────────────────────
+const PC = {
+  graham:[
+    {c:'<span class="kw">function</span> <span class="fn">GrahamScan</span>(P):',                              t:'Entry point — takes array of 2D points P'},
+    {c:'  pivot = <span class="fn">lowestLeft</span>(P)',                                                       t:'Find lowest-y (then leftmost-x) point — always on hull'},
+    {c:'  sorted = <span class="fn">sortByPolarAngle</span>(P, pivot)',                                         t:'Sort all others by CCW polar angle from pivot — O(n log n). Essential for correctness.'},
+    {c:'  S = Stack([pivot, sorted[<span class="nm">0</span>]])',                                               t:'Initialize stack with pivot and first sorted point'},
+    {c:'  <span class="kw">for</span> i = <span class="nm">1</span> <span class="kw">to</span> len(sorted)−1:',  t:'Sweep through remaining sorted points one by one'},
+    {c:'    <span class="kw">while</span> |S| ≥ <span class="nm">2</span>  <span class="kw">and</span>',          t:'Check while stack has at least 2 points'},
+    {c:'      <span class="fn">cross</span>(S[−2], S[−1], sorted[i]) ≤ <span class="nm">0</span>:',            t:'Cross product ≤ 0 → right turn or collinear → breaks convexity'},
+    {c:'      S.<span class="fn">pop</span>()',                                                                  t:'Remove top — creates a concave bend'},
+    {c:'    S.<span class="fn">push</span>(sorted[i])',                                                         t:'Push current point — makes a valid left (CCW) turn'},
+    {c:'  <span class="kw">return</span> S  <span class="cm">// hull in CCW order</span>',                       t:'Stack contains the complete convex hull'},
+  ],
+  jarvis:[
+    {c:'<span class="kw">function</span> <span class="fn">JarvisMarch</span>(P):',                              t:'Entry point — takes array of 2D points P'},
+    {c:'  start = <span class="fn">leftmost</span>(P)',                                                         t:'Find leftmost-x (then lowest-y) point — always on hull'},
+    {c:'  hull = []',                                                                                           t:'Initialize empty result list'},
+    {c:'  cur = start',                                                                                         t:'Begin gift-wrapping from the start point'},
+    {c:'  <span class="kw">do</span>:',                                                                         t:'Repeat until we wrap back to the starting point'},
+    {c:'    hull.<span class="fn">add</span>(cur)',                                                             t:'Confirmed: current point is a hull vertex'},
+    {c:'    nxt = P[<span class="nm">0</span>]  <span class="cm">// any initial candidate</span>',             t:'Pick any point as initial candidate for next hull vertex'},
+    {c:'    <span class="kw">for each</span> p <span class="kw">in</span> P:',                                   t:'Compare every point — O(n) linear search'},
+    {c:'      <span class="kw">if</span> <span class="fn">cross</span>(cur, nxt, p) < <span class="nm">0</span>:',  t:'p is more counterclockwise than current best'},
+    {c:'        nxt = p  <span class="cm">// greedy update</span>',                                            t:'Greedy choice: p wraps more to the left'},
+    {c:'    cur = nxt',                                                                                         t:'Advance to the most-CCW point found'},
+    {c:'  <span class="kw">while</span> cur ≠ start',                                                          t:'Stop when we close the loop'},
+    {c:'  <span class="kw">return</span> hull',                                                                t:'Return hull in CCW order'},
+  ]
+};
+
+// ── MATH ───────────────────────────────────────────────────────
+function cross(O,A,B){ return (A.x-O.x)*(B.y-O.y)-(A.y-O.y)*(B.x-O.x); }
+function dist2(A,B)  { return (A.x-B.x)**2+(A.y-B.y)**2; }
+function pang(pv,p)  { return Math.atan2(p.y-pv.y, p.x-pv.x); }
+function R(v)        { return Math.round(v); }
+
+// ── STEP OBJECTS have unique keys:
+//   sarr = stack array,  scnt = stack op counter
+//   harr = hull array,   hcnt = hull point counter
+// ──────────────────────────────────────────────────────────────
+
+// ── GRAHAM STEPS ───────────────────────────────────────────────
+function grahamSteps(P) {
+  const S = []; const n = P.length; if (n<3) return S;
+
+  // find pivot
+  let pi=0;
+  for(let i=1;i<n;i++) if(P[i].y>P[pi].y||(P[i].y===P[pi].y&&P[i].x<P[pi].x)) pi=i;
+
+  S.push({t:'pivot', pivIdx:pi, sarr:[], harr:[],
+    desc:`Pivot P${pi} at (${R(P[pi].x)},${R(P[pi].y)}) — lowest-leftmost point, always on hull.`,
+    pl:1, cmp:0, hcnt:0, scnt:0, itr:0});
+
+  // sort by polar angle
+  const oth = P.map((p,i)=>({...p,i})).filter((_,i)=>i!==pi);
+  oth.sort((a,b)=>{
+    const da=pang(P[pi],a), db=pang(P[pi],b);
+    if(Math.abs(da-db)>1e-9) return da-db;
+    return dist2(P[pi],a)-dist2(P[pi],b);
+  });
+  const srt=[{...P[pi],i:pi},...oth];
+  const srtIdxs=srt.map(p=>p.i);
+  const nc=Math.max(0, oth.length*Math.ceil(Math.log2(oth.length+1)));
+
+  S.push({t:'sorted', sorted:srtIdxs, sarr:[], harr:[],
+    desc:`Sorted ${oth.length} pts by polar angle from P${pi}. Order: ${srtIdxs.slice(0,6).map(i=>'P'+i).join('→')}${srtIdxs.length>6?'…':''}.`,
+    pl:2, cmp:nc, hcnt:0, scnt:0, itr:0});
+
+  const stack=[srt[0].i, srt[1].i];
+  S.push({t:'initstk', sarr:[...stack], harr:[],
+    desc:`Stack init: [P${stack[0]}, P${stack[1]}] — starting edge.`,
+    pl:3, cmp:nc, hcnt:2, scnt:2, itr:0});
+
+  let tc=nc, ts=2, ti=0;
+  for(let idx=2; idx<srt.length; idx++){
+    ti++;
+    const p=srt[idx].i;
+    while(stack.length>=2){
+      tc++;
+      const top=stack[stack.length-1], sec=stack[stack.length-2];
+      const cv=cross(P[sec],P[top],P[p]);
+      S.push({t:'check', sarr:[...stack], harr:[], chk:p, top, sec, cv,
+        desc:`Iter ${ti}: cross(P${sec},P${top},P${p})=${cv.toFixed(1)} → ${cv<=0?`RIGHT/COLLINEAR — pop P${top}`:`LEFT turn ✓ — P${top} stays`}`,
+        pl:cv<=0?6:5, cmp:tc, hcnt:stack.length, scnt:ts, itr:ti});
+      if(cv<=0){
+        stack.pop(); ts++;
+        S.push({t:'pop', sarr:[...stack], harr:[], popped:top, chk:p,
+          desc:`Popped P${top} — concave bend. Stack: [${stack.map(i=>'P'+i).join(', ')}]`,
+          pl:7, cmp:tc, hcnt:stack.length, scnt:ts, itr:ti});
+      } else break;
+    }
+    stack.push(p); ts++;
+    S.push({t:'push', sarr:[...stack], harr:[], pushed:p,
+      desc:`Pushed P${p} → stack=[${stack.map(i=>'P'+i).join(', ')}] (sz ${stack.length})`,
+      pl:8, cmp:tc, hcnt:stack.length, scnt:ts, itr:ti});
+  }
+  S.push({t:'done', sarr:[...stack], harr:[...stack],
+    desc:`✅ Done! ${stack.length} hull pts: ${stack.map(i=>'P'+i).join('→')}→P${stack[0]}`,
+    pl:9, cmp:tc, hcnt:stack.length, scnt:ts, itr:ti});
+  return S;
+}
+
+// ── JARVIS STEPS ───────────────────────────────────────────────
+function jarvisSteps(P) {
+  const S=[]; const n=P.length; if(n<3) return S;
+
+  let si=0;
+  for(let i=1;i<n;i++) if(P[i].x<P[si].x||(P[i].x===P[si].x&&P[i].y>P[si].y)) si=i;
+
+  S.push({t:'start', startIdx:si, sarr:[], harr:[],
+    desc:`Leftmost P${si} at (${R(P[si].x)},${R(P[si].y)}) — start of gift wrap.`,
+    pl:1, cmp:0, hcnt:0, scnt:0, itr:0});
+
+  const hull=[]; let cu=si, tc=0, ti=0;
+  do {
+    hull.push(cu); ti++;
+    S.push({t:'addhul', sarr:[], harr:[...hull], cu,
+      desc:`Added P${cu} to hull. Hull: [${hull.map(i=>'P'+i).join('→')}]`,
+      pl:5, cmp:tc, hcnt:hull.length, scnt:0, itr:ti});
+
+    let nx=(cu+1)%n;
+    S.push({t:'initcnd', sarr:[], harr:[...hull], cu, nx,
+      desc:`Initial candidate: P${nx}. Scanning all ${n} points…`,
+      pl:6, cmp:tc, hcnt:hull.length, scnt:0, itr:ti});
+
+    for(let p=0;p<n;p++){
+      if(p===cu) continue;
+      tc++;
+      const cv=cross(P[cu],P[nx],P[p]);
+      S.push({t:'cmp', sarr:[], harr:[...hull], cu, nx, cnd:p, cv,
+        desc:`Compare P${p} vs best P${nx}: cross=${cv.toFixed(1)} → ${cv<0?`P${p} more CCW — new candidate!`:`P${nx} stays`}`,
+        pl:cv<0?8:7, cmp:tc, hcnt:hull.length, scnt:0, itr:ti});
+      if(cv<0){
+        nx=p;
+        S.push({t:'updcnd', sarr:[], harr:[...hull], cu, nx,
+          desc:`Greedy update → P${nx} is most-CCW from P${cu}.`,
+          pl:9, cmp:tc, hcnt:hull.length, scnt:0, itr:ti});
+      }
+    }
+    cu=nx;
+  } while(cu!==si);
+
+  S.push({t:'done', sarr:[], harr:[...hull],
+    desc:`✅ Done! Hull: ${hull.map(i=>'P'+i).join('→')}→P${hull[0]}`,
+    pl:12, cmp:tc, hcnt:hull.length, scnt:0, itr:ti});
+  return S;
+}
+
+// ── SVG HELPERS ────────────────────────────────────────────────
+const NS='http://www.w3.org/2000/svg';
+const mk=tag=>document.createElementNS(NS,tag);
+function sa(el,o){ Object.entries(o).forEach(([k,v])=>el.setAttribute(k,v)); return el; }
+
+function initSVG(){
+  const el=document.getElementById('vsvg');
+  const r=el.getBoundingClientRect();
+  const newW=Math.round(r.width)||600;
+  const newH=Math.round(r.height)||400;
+  if(newW!==SW||newH!==SH){
+    SW=newW; SH=newH;
+    svgReady=false; // force rebuild with new dimensions
+  }
+  el.setAttribute('viewBox',`0 0 ${SW} ${SH}`);
+  el.setAttribute('preserveAspectRatio','none');
+}
+
+// ── RENDER ─────────────────────────────────────────────────────
+// Uses persistent SVG elements updated via CSS transitions — no flicker.
+let svgReady=false;
+
+function resetSVG(){ svgReady=false; }
+
+function render(idx){
+  const el=document.getElementById('vsvg');
+  document.getElementById('npts').textContent=pts.length;
+
+  if(!pts.length){
+    el.innerHTML=''; svgReady=false;
+    const t=mk('text');
+    sa(t,{x:SW/2,y:SH/2,'text-anchor':'middle',fill:'var(--txd)','font-family':'var(--mono)','font-size':'12'});
+    t.textContent='Click to add points, or use a preset';
+    el.appendChild(t); return;
+  }
+  document.getElementById('vnote').style.display='none';
+
+  // ── Build state from step ─────────────────────────────────────
+  const step=steps[idx];
+  const n=pts.length;
+  let ptState=new Array(n).fill('def');
+  let activeEdges=[], hullSet=new Set(), chkLine=null;
+
+  if(step){
+    const t=step.t;
+    if(t==='pivot'){ ptState[step.pivIdx]='piv'; }
+    else if(t==='start'){ ptState[step.startIdx]='piv'; }
+    else if(t==='sorted'){
+      step.sorted.forEach((id,i)=>{ ptState[id]=i===0?'piv':'srt'; });
+    }
+    else if(['initstk','check','pop','push'].includes(t)){
+      step.sarr.forEach(i=>{ hullSet.add(i); ptState[i]='hul'; });
+      if(step.chk!=null) ptState[step.chk]='act';
+      if(step.top!=null&&ptState[step.top]==='hul') ptState[step.top]='act';
+      for(let i=0;i<step.sarr.length-1;i++) activeEdges.push([step.sarr[i],step.sarr[i+1]]);
+      if(t==='check'&&step.chk!=null){
+        const tp=step.sarr[step.sarr.length-1];
+        if(tp!=null) chkLine=[tp,step.chk];
+      }
+    }
+    else if(t==='done'&&step.sarr.length){
+      step.sarr.forEach(i=>{ hullSet.add(i); ptState[i]='hul'; });
+      for(let i=0;i<step.sarr.length;i++)
+        activeEdges.push([step.sarr[i],step.sarr[(i+1)%step.sarr.length]]);
+    }
+    else if(['addhul','initcnd','cmp','updcnd'].includes(t)){
+      step.harr.forEach(i=>{ hullSet.add(i); ptState[i]='hul'; });
+      if(step.cu!=null) ptState[step.cu]='piv';
+      if(step.nx!=null&&step.nx!==step.cu) ptState[step.nx]='act';
+      if(step.cnd!=null&&step.cnd!==step.cu&&step.cnd!==step.nx) ptState[step.cnd]='cnd';
+      for(let i=0;i<step.harr.length-1;i++) activeEdges.push([step.harr[i],step.harr[i+1]]);
+      if(step.harr.length&&step.cu!=null) activeEdges.push([step.harr[step.harr.length-1],step.cu]);
+      if(t==='cmp'&&step.cnd!=null) chkLine=[step.cu,step.cnd];
+    }
+    else if(t==='done'&&step.harr.length){
+      step.harr.forEach(i=>{ hullSet.add(i); ptState[i]='hul'; });
+      for(let i=0;i<step.harr.length;i++)
+        activeEdges.push([step.harr[i],step.harr[(i+1)%step.harr.length]]);
+    }
+  }
+
+  // ── First time: build persistent DOM structure ────────────────
+  if(!svgReady){
+    el.innerHTML='';
+    el.setAttribute('viewBox',`0 0 ${SW} ${SH}`);
+    const defs=mk('defs');
+    defs.innerHTML='<filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>';
+    el.appendChild(defs);
+    // hull fill polygon
+    const poly=mk('polygon'); poly.id='sv-hull-fill';
+    sa(poly,{points:'',fill:'rgba(0,204,255,0.08)',stroke:'none',opacity:'0',
+      style:'transition:opacity .4s ease'});
+    el.appendChild(poly);
+    // check line
+    const cl=mk('line'); cl.id='sv-chk';
+    sa(cl,{x1:0,y1:0,x2:0,y2:0,stroke:'rgba(255,96,48,.55)',
+      'stroke-width':'1.5','stroke-dasharray':'6,4',opacity:'0'});
+    el.appendChild(cl);
+    // edge group
+    const eg=mk('g'); eg.id='sv-edges'; el.appendChild(eg);
+    // point + label pairs
+    pts.forEach((p,i)=>{
+      const c=mk('circle'); c.id='sv-c'+i;
+      sa(c,{cx:p.x,cy:p.y,r:5,fill:'var(--pd)',
+        style:'transition:r .18s ease,fill .2s ease'});
+      el.appendChild(c);
+      const lb=mk('text'); lb.id='sv-l'+i;
+      sa(lb,{x:p.x+9,y:p.y-7,fill:'var(--txd)',
+        'font-family':'var(--mono)','font-size':'9','pointer-events':'none',
+        style:'transition:fill .2s ease'});
+      lb.textContent='P'+i;
+      el.appendChild(lb);
+    });
+    // stack group
+    const sg=mk('g'); sg.id='sv-stack'; el.appendChild(sg);
+    svgReady=true;
+  }
+
+  // ── Update points (CSS transitions handle the animation) ──────
+  const pclr={def:'var(--pd)',act:'var(--pa)',hul:'var(--ph)',piv:'var(--pp)',cnd:'var(--pc)',srt:'var(--ps)'};
+  const prad={def:5,act:7,hul:6,piv:9,cnd:6,srt:5};
+  const lclr={def:'var(--txd)',act:'var(--c5)',hul:'var(--c3)',piv:'var(--c4)',cnd:'var(--c2)',srt:'var(--c6)'};
+  pts.forEach((p,i)=>{
+    const c=document.getElementById('sv-c'+i);
+    const lb=document.getElementById('sv-l'+i);
+    if(!c||!lb) return;
+    const st=ptState[i];
+    c.setAttribute('r', prad[st]||5);
+    c.setAttribute('fill', pclr[st]);
+    if(st==='piv'||st==='act'){
+      c.setAttribute('filter','url(#glow)');
+      c.style.animation='pulse .85s ease-in-out infinite';
+    } else {
+      c.removeAttribute('filter');
+      c.style.animation='none';
+    }
+    lb.setAttribute('fill', lclr[st]);
+  });
+
+  // ── Update edges (add new, remove gone, no flicker) ───────────
+  const eg=document.getElementById('sv-edges');
+  const wantKeys=new Set(activeEdges.map(([a,b])=>Math.min(a,b)+'-'+Math.max(a,b)));
+  // remove edges no longer needed
+  Array.from(eg.children).forEach(ch=>{
+    if(!wantKeys.has(ch.dataset.k)){ ch.setAttribute('opacity','0');
+      setTimeout(()=>{ if(ch.parentNode) ch.parentNode.removeChild(ch); },220); }
+  });
+  // add new edges
+  const haveKeys=new Set(Array.from(eg.children).map(c=>c.dataset.k));
+  activeEdges.forEach(([a,b])=>{
+    const k=Math.min(a,b)+'-'+Math.max(a,b);
+    if(haveKeys.has(k)) return;
+    const l=mk('line');
+    sa(l,{x1:pts[a].x,y1:pts[a].y,x2:pts[b].x,y2:pts[b].y,
+      stroke:'var(--c1)','stroke-width':'2.5',filter:'url(#glow)',opacity:'0',
+      style:'transition:opacity .2s ease'});
+    l.dataset.k=k;
+    eg.appendChild(l);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>l.setAttribute('opacity','1')));
+  });
+
+  // ── Check line ────────────────────────────────────────────────
+  const cl=document.getElementById('sv-chk');
+  if(cl){
+    if(chkLine){
+      const [a,b]=chkLine;
+      sa(cl,{x1:pts[a].x,y1:pts[a].y,x2:pts[b].x,y2:pts[b].y,opacity:'1'});
+      cl.style.animation='dashMov .5s linear infinite';
+    } else {
+      cl.setAttribute('opacity','0');
+      cl.style.animation='none';
+    }
+  }
+
+  // ── Hull fill ─────────────────────────────────────────────────
+  const poly=document.getElementById('sv-hull-fill');
+  if(poly){
+    if(step&&step.t==='done'){
+      const hp=step.sarr.length?step.sarr:step.harr;
+      if(hp.length>=3){
+        poly.setAttribute('points',hp.map(i=>pts[i].x+','+pts[i].y).join(' '));
+        poly.setAttribute('opacity','1');
+      }
+    } else {
+      poly.setAttribute('opacity','0');
+    }
+  }
+
+  // ── Stack widget (rebuild only when needed) ───────────────────
+  const sg=document.getElementById('sv-stack');
+  if(sg){
+    sg.innerHTML='';
+    if(algo==='graham'&&step&&step.sarr&&step.sarr.length){
+      const bw=24,bh=18,gap=2,sx=10,sy0=SH-12;
+      const lbl=mk('text');
+      sa(lbl,{x:sx,y:sy0-step.sarr.length*(bh+gap)-7,
+        'font-family':'var(--mono)','font-size':'8',fill:'var(--txd)'});
+      lbl.textContent='STACK'; sg.appendChild(lbl);
+      step.sarr.forEach((pi,i)=>{
+        const by=sy0-i*(bh+gap)-bh, isTop=i===step.sarr.length-1;
+        const rect=mk('rect');
+        sa(rect,{x:sx,y:by,width:bw,height:bh,
+          fill:isTop?'rgba(0,204,255,.25)':'rgba(0,204,255,.09)',
+          stroke:isTop?'var(--c1)':'var(--bhi)','stroke-width':'1',rx:'1'});
+        sg.appendChild(rect);
+        const t=mk('text');
+        sa(t,{x:sx+bw/2,y:by+bh/2+3.5,'text-anchor':'middle',
+          'font-family':'var(--mono)','font-size':'8',
+          fill:isTop?'var(--c1)':'var(--txd)'});
+        t.textContent='P'+pi; sg.appendChild(t);
+      });
+    }
+  }
+}
+
+// ── PLAYBACK ───────────────────────────────────────────────────
+function buildSteps(){
+  if(pts.length<3){ alert('Need at least 3 points.'); return; }
+  steps=algo==='graham'?grahamSteps(pts):jarvisSteps(pts);
+  cur=-1;
+  rebuildHist();
+  setStatus('ready');
+  render(-1);
+  setExplain(null);
+  resetCnts();
+  updCtr();
+  setBtn('bpa',true);
+  updSortDemo();
+}
+
+function stepFwd(){
+  if(!steps.length){ buildSteps(); if(!steps.length) return; }
+  if(cur<steps.length-1){ cur++; applyStep(cur); }
+}
+
+function applyStep(idx){
+  const s=steps[idx];
+  render(idx);
+  setExplain(s);
+  updCnts(s);
+  hlPseudo(s.pl);
+  updCtr();
+  updHistRow(idx);
+  setStatus(idx===steps.length-1?'done':'playing');
+  // refresh CLO-1 chart if it's visible or if algorithm just finished
+  if(idx===steps.length-1 || document.getElementById('bc-clo1').classList.contains('on')){
+    drawC1Chart(parseInt(document.getElementById('nsl').value));
+  }
+}
+
+function doPlay(){
+  if(!steps.length){ buildSteps(); if(!steps.length) return; }
+  if(cur>=steps.length-1) cur=-1;
+  playing=true;
+  setBtn('bpl',true); setBtn('bpa',false); setBtn('bst',true);
+  setStatus('playing');
+  const iv=Math.max(80,540/speed);
+  timer=setInterval(()=>{
+    if(cur<steps.length-1){ cur++; applyStep(cur); }
+    else{
+      clearInterval(timer); playing=false;
+      setBtn('bpl',false); setBtn('bpa',true); setBtn('bst',false);
+      setStatus('done');
+    }
+  },iv);
+}
+
+function doPause(){
+  clearInterval(timer); playing=false;
+  setBtn('bpl',false); setBtn('bpa',true); setBtn('bst',false);
+  setStatus('paused');
+}
+
+function doReset(){
+  clearInterval(timer); playing=false;
+  steps=[]; cur=-1;
+  resetCnts();
+  resetSVG();
+  setBtn('bpa',true);
+  setBtn('bpl',false); setBtn('bst',false);
+  document.getElementById('hb').innerHTML='';
+  render(-1);
+  setExplain(null);
+  updCtr();
+  setStatus('idle');
+  hlPseudo(-1);
+  document.getElementById('vnote').style.display='';
+}
+
+function setBtn(id,disabled){
+  const el=document.getElementById(id);
+  if(el) el.disabled=disabled;
+}
+
+function setSpd(v){
+  speed=parseFloat(v);
+  document.getElementById('spv').textContent=speed+'x';
+  if(playing){ doPause(); doPlay(); }
+}
+
+// ── UI ─────────────────────────────────────────────────────────
+function setStatus(s){
+  const el=document.getElementById('sbg');
+  const m={idle:'IDLE',ready:'READY',playing:'PLAYING',paused:'PAUSED',done:'DONE'};
+  el.textContent=m[s]||s.toUpperCase();
+  el.className='sbadge '+s;
+}
+
+function updCtr(){
+  document.getElementById('sctr').textContent=`${Math.max(0,cur+1)} / ${steps.length}`;
+}
+
+const TTAG={pivot:'PIVOT',sorted:'SORT',initstk:'INIT STK',check:'CHECK',pop:'POP',
+  push:'PUSH',done:'DONE',start:'START',addhul:'ADD HULL',initcnd:'CANDIDATE',
+  cmp:'COMPARE',updcnd:'UPDATE'};
+
+function setExplain(step){
+  const box=document.getElementById('ebox');
+  if(!step){
+    box.innerHTML='<span class="etag">IDLE</span>Select a preset or add points, then click <em>BUILD STEPS</em>.';
+    return;
+  }
+  const tag=TTAG[step.t]||step.t.toUpperCase();
+  box.innerHTML=`<span class="etag">${tag}</span>`+
+    step.desc.replace(/P(\d+)/g,'<em>P$1</em>').replace(/(-?\d+\.\d+)/g,'<b>$1</b>');
+}
+
+function updCnts(s){
+  const rows=[['cc','vc',s.cmp],['ch','vh',s.hcnt],['cs','vs',s.scnt],['ci','vi',s.itr]];
+  rows.forEach(([ci,cv,val])=>{
+    const el=document.getElementById(cv);
+    if(el.textContent!==String(val)){
+      el.textContent=val;
+      const ci2=document.getElementById(ci);
+      ci2.classList.add('bump');
+      setTimeout(()=>ci2.classList.remove('bump'),320);
+    }
+  });
+}
+
+function resetCnts(){
+  ['vc','vh','vs','vi'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent='0'; });
+}
+
+function hlPseudo(li){
+  const wrap=document.getElementById('pw');
+  document.querySelectorAll('.pline').forEach((el,i)=>{
+    el.classList.toggle('hi',i===li);
+    if(i===li){
+      const eT=el.offsetTop,eB=eT+el.offsetHeight;
+      const wT=wrap.scrollTop,wB=wT+wrap.clientHeight;
+      if(eT<wT) wrap.scrollTop=eT-4;
+      else if(eB>wB) wrap.scrollTop=eB-wrap.clientHeight+4;
+    }
+  });
+}
+
+// ── HISTORY ────────────────────────────────────────────────────
+function rebuildHist(){
+  const tb=document.getElementById('hb');
+  tb.innerHTML='';
+  const MAX=30, off=Math.max(0,steps.length-MAX);
+  steps.slice(off).forEach((s,i)=>{
+    const ri=i+off;
+    const tcls={push:'tp',addhul:'tp',pop:'tpo',done:'td2',pivot:'tpi',start:'tpi',cmp:'tc',updcnd:'tc'}[s.t]||'';
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${ri+1}</td><td class="${tcls}">${(TTAG[s.t]||s.t).slice(0,9)}</td>
+      <td title="${s.desc}">${s.desc.slice(0,27)}…</td><td>${s.hcnt||0}</td>`;
+    tr.addEventListener('click',()=>{ cur=ri; applyStep(ri); });
+    tb.appendChild(tr);
+  });
+}
+
+function updHistRow(idx){
+  const wrap=document.getElementById('hw');
+  const rows=document.querySelectorAll('#hb tr');
+  const MAX=30, off=Math.max(0,steps.length-MAX);
+  rows.forEach((r,i)=>r.classList.toggle('cur',i+off===idx));
+  const ri=idx-off;
+  if(rows[ri]){
+    const rT=rows[ri].offsetTop,rB=rT+rows[ri].offsetHeight;
+    const wT=wrap.scrollTop,wB=wT+wrap.clientHeight;
+    if(rT<wT) wrap.scrollTop=rT-4;
+    else if(rB>wB) wrap.scrollTop=rB-wrap.clientHeight+4;
+  }
+}
+
+// ── PRESETS ────────────────────────────────────────────────────
+function loadPre(name){
+  initSVG();
+  const w=SW,h=SH,cx=w/2,cy=h/2;
+  const rx=t=>PAD+t*(w-2*PAD), ry=t=>PAD+t*(h-2*PAD), rn=Math.random.bind(Math);
+  const map={
+    random:()=>Array.from({length:18},()=>({x:rx(rn()),y:ry(rn())})),
+    circle:()=>[
+      ...Array.from({length:10},(_,i)=>({x:cx+(w*.38)*Math.cos(i/10*2*Math.PI),y:cy+(h*.38)*Math.sin(i/10*2*Math.PI)})),
+      ...Array.from({length:8},()=>({x:cx+(rn()-.5)*(w*.28),y:cy+(rn()-.5)*(h*.28)}))
+    ],
+    grid:()=>{ const ps=[]; for(let i=0;i<5;i++) for(let j=0;j<4;j++) ps.push({x:rx(.08+i*.21),y:ry(.08+j*.28)}); return ps; },
+    tri:()=>{
+      const c=[{x:cx,y:PAD+12},{x:PAD+12,y:h-PAD-12},{x:w-PAD-12,y:h-PAD-12}];
+      return [...c,...Array.from({length:10},()=>({x:(c[0].x+c[1].x+c[2].x)/3+(rn()-.5)*(w*.26),y:(c[0].y+c[1].y+c[2].y)/3+(rn()-.5)*(h*.26)}))];
+    },
+    star:()=>[
+      ...Array.from({length:5},(_,i)=>({x:cx+(w*.4)*Math.cos(i/5*2*Math.PI-Math.PI/2),y:cy+(h*.4)*Math.sin(i/5*2*Math.PI-Math.PI/2)})),
+      ...Array.from({length:5},(_,i)=>({x:cx+(w*.16)*Math.cos((i+.5)/5*2*Math.PI-Math.PI/2),y:cy+(h*.16)*Math.sin((i+.5)/5*2*Math.PI-Math.PI/2)})),
+      ...Array.from({length:8},()=>({x:cx+(rn()-.5)*(w*.18),y:cy+(rn()-.5)*(h*.18)}))
+    ],
+    wg:()=>Array.from({length:16},(_,i)=>({x:cx+(w*.43)*Math.cos(i/16*2*Math.PI-Math.PI/2),y:cy+(h*.43)*Math.sin(i/16*2*Math.PI-Math.PI/2)})),
+    wj:()=>Array.from({length:14},(_,i)=>({x:cx+(w*.43)*Math.cos(i/14*2*Math.PI-Math.PI/2),y:cy+(h*.43)*Math.sin(i/14*2*Math.PI-Math.PI/2)})),
+  };
+  if(!map[name]) return;
+  pts=map[name]();
+  doReset();
+  render(-1);
+  updSortDemo();
+  if(name==='wg') setTimeout(()=>alert('WORST CASE — GRAHAM SCAN\n\nAll 16 pts on hull (regular polygon).\nGraham still O(n log n) — sort unavoidable.\nNo pops ever. Comparisons ≈ n·log₂n.'),80);
+  if(name==='wj') setTimeout(()=>alert('WORST CASE — JARVIS MARCH\n\nAll 14 pts on hull (h=n).\nEach of 14 rounds scans all 14 pts.\nTotal = n×h = n² ≈ 196 comparisons.\nGraham would be faster here: O(n log n).'),80);
+}
+
+function applyCustom(){
+  const txt=document.getElementById('ctin').value.trim();
+  if(!txt){ alert('Please type some points first.\nExample: 1,5  3,4  6,5  2,1'); return; }
+  const pairs=txt.match(/-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?/g);
+  if(!pairs||pairs.length<3){ alert('Need at least 3 valid x,y pairs.\nExample: 1,5  3,4  6,5  2,1'); return; }
+  initSVG();
+  const raw=pairs.map(p=>{ const [x,y]=p.split(',').map(Number); return {x,y}; });
+  const xs=raw.map(p=>p.x), ys=raw.map(p=>p.y);
+  const minX=Math.min(...xs), maxX=Math.max(...xs);
+  const minY=Math.min(...ys), maxY=Math.max(...ys);
+  const rangeX=maxX-minX||1, rangeY=maxY-minY||1;
+  const drawW=SW-2*PAD, drawH=SH-2*PAD;
+  const scale=Math.min(drawW/rangeX, drawH/rangeY);
+  const offX=PAD+(drawW-rangeX*scale)/2;
+  const offY=PAD+(drawH-rangeY*scale)/2;
+  pts=raw.map(p=>({ x: offX+(p.x-minX)*scale, y: offY+(p.y-minY)*scale }));
+  doReset(); render(-1); updSortDemo();
+  // show feedback on button
+  const btn=document.getElementById('bac');
+  const orig=btn.textContent;
+  btn.textContent='✓ ' + pts.length + ' POINTS LOADED';
+  btn.style.borderColor='var(--c3)';
+  btn.style.color='var(--c3)';
+  btn.style.background='rgba(53,255,85,.12)';
+  setTimeout(function(){ btn.textContent=orig; btn.style.borderColor=''; btn.style.color=''; btn.style.background=''; }, 2500);
+}
+
+// ── ALGO SWITCH ────────────────────────────────────────────────
+function swAlgo(a){
+  algo=a;
+  document.getElementById('tg').classList.toggle('on',a==='graham');
+  document.getElementById('tj').classList.toggle('on',a==='jarvis');
+  document.getElementById('vtitle').textContent=a==='graham'?'GRAHAM SCAN':'JARVIS MARCH';
+  buildPseudo();
+  doReset();
+  updOverview();
+  // if overview tab is active, keep it active
+  const ovBtn=document.querySelector('.btab[data-tab="overview"]');
+  const ovActive=document.getElementById('bc-overview').classList.contains('on');
+  if(ovActive && ovBtn) sBTab('overview', ovBtn);
+}
+
+// ── PSEUDOCODE ─────────────────────────────────────────────────
+function buildPseudo(){
+  const wrap=document.getElementById('pw');
+  wrap.innerHTML='';
+  PC[algo].forEach((l,i)=>{
+    const div=document.createElement('div');
+    div.className='pline';
+    div.innerHTML=`<span class="ln">${i}</span><span class="cd">${l.c}</span>`;
+    div.addEventListener('mouseenter',e=>showTT(e,l.t));
+    div.addEventListener('mouseleave',hideTT);
+    wrap.appendChild(div);
+  });
+}
+
+// ── TOOLTIP ────────────────────────────────────────────────────
+function showTT(e,txt){ const el=document.getElementById('tt'); el.textContent=txt; el.style.display='block'; moveTT(e); }
+function moveTT(e){ const el=document.getElementById('tt'); el.style.left=(e.clientX+14)+'px'; el.style.top=(e.clientY-8)+'px'; }
+function hideTT(){ document.getElementById('tt').style.display='none'; }
+
+// ── SECTION TOGGLE ─────────────────────────────────────────────
+function togSec(titleEl){
+  const cont=titleEl.closest('.sbox').querySelector('.scont');
+  const arr=titleEl.querySelector('.arr');
+  const isCol=cont.classList.toggle('col');
+  arr.style.transform=isCol?'rotate(-90deg)':'';
+}
+
+// ── BOTTOM TABS ────────────────────────────────────────────────
+function sBTab(id, btn){
+  document.querySelectorAll('.bcon').forEach(el=>el.classList.remove('on'));
+  document.querySelectorAll('.btab').forEach(el=>el.classList.remove('on'));
+  document.getElementById('bc-'+id).classList.add('on');
+  btn.classList.add('on');
+  if(id==='clo1') drawC1Chart(parseInt(document.getElementById('nsl').value));
+}
+
+// ── CLO-1 CHART ────────────────────────────────────────────────
+function drawC1Chart(N){
+  const svg=document.getElementById('c1svg');
+  if(!svg) return;
+  const W=svg.getBoundingClientRect().width||340;
+  const H=svg.getBoundingClientRect().height||140;
+  if(W<10||H<10) return;
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  svg.innerHTML='';
+  const pd={l:36,r:8,t:12,b:26};
+  const iW=W-pd.l-pd.r, iH=H-pd.t-pd.b;
+
+  const curves=[
+    {lbl:'O(n log n) — Graham',c:'var(--c1)',fn:n=>n*Math.log2(n+1)},
+    {lbl:'O(nh) h=√n — Jarvis avg',c:'var(--c2)',fn:n=>n*Math.sqrt(n)*.5},
+    {lbl:'O(n²) — Jarvis worst',c:'var(--c4)',fn:n=>n*n/6},
+    {lbl:'O(n) — best possible',c:'var(--c3)',fn:n=>n*3},
+  ];
+
+  // Get actual run data if available
+  const lastStep=steps.length?steps[steps.length-1]:null;
+  const actualN=pts.length;
+  const actualCmp=lastStep?lastStep.cmp:0;
+  const hasActual=lastStep&&actualN>=3&&actualCmp>0;
+
+  // Scale to fit actual dot too
+  let maxV=Math.max(...curves.map(c=>c.fn(N)));
+  if(hasActual) maxV=Math.max(maxV, actualCmp*1.15);
+
+  const sx=n=>pd.l+(n/N)*iW;
+  const sy=v=>pd.t+iH-Math.min((v/maxV)*iH,iH);
+
+  // Grid lines
+  for(let i=1;i<=4;i++){
+    const y=pd.t+iH*i/4;
+    const l=mk('line'); sa(l,{x1:pd.l,x2:pd.l+iW,y1:y,y2:y,stroke:'rgba(255,255,255,.05)'}); svg.appendChild(l);
+  }
+  // Axes
+  const ax=mk('line'); sa(ax,{x1:pd.l,x2:pd.l+iW,y1:pd.t+iH,y2:pd.t+iH,stroke:'rgba(255,255,255,.2)'}); svg.appendChild(ax);
+  const ay=mk('line'); sa(ay,{x1:pd.l,x2:pd.l,y1:pd.t,y2:pd.t+iH,stroke:'rgba(255,255,255,.2)'}); svg.appendChild(ay);
+
+  // Axis labels
+  const xl=mk('text'); sa(xl,{x:pd.l+iW/2,y:H-2,'text-anchor':'middle',fill:'var(--txd)','font-size':'8','font-family':'var(--mono)'}); xl.textContent=`input size n (1 to ${N})`; svg.appendChild(xl);
+  const yl=mk('text'); sa(yl,{x:8,y:pd.t+iH/2,'text-anchor':'middle',fill:'var(--txd)','font-size':'8','font-family':'var(--mono)',transform:`rotate(-90,8,${pd.t+iH/2})`}); yl.textContent='operations'; svg.appendChild(yl);
+
+  // Curves
+  curves.forEach(c=>{
+    let d='';
+    for(let n=1;n<=N;n++) d+=(n===1?'M':'L')+`${sx(n).toFixed(1)},${sy(c.fn(n)).toFixed(1)}`;
+    const path=mk('path'); sa(path,{d,fill:'none',stroke:c.c,'stroke-width':'1.8'}); svg.appendChild(path);
+  });
+
+  // Legend (compact, top-left)
+  curves.forEach((c,i)=>{
+    const ly=pd.t+6+i*15;
+    const ll=mk('line'); sa(ll,{x1:pd.l+3,x2:pd.l+16,y1:ly,y2:ly,stroke:c.c,'stroke-width':'2'}); svg.appendChild(ll);
+    const lt=mk('text'); sa(lt,{x:pd.l+19,y:ly+4,fill:c.c,'font-size':'7','font-family':'var(--mono)'}); lt.textContent=c.lbl; svg.appendChild(lt);
+  });
+
+  // ── ACTUAL RUN DOT ────────────────────────────────────────────
+  if(hasActual && actualN<=N){
+    const dotX=sx(actualN), dotY=sy(actualCmp);
+    // vertical guide line
+    const vl=mk('line'); sa(vl,{x1:dotX,x2:dotX,y1:pd.t,y2:pd.t+iH,stroke:'rgba(255,208,0,.25)','stroke-dasharray':'4,3'}); svg.appendChild(vl);
+    // horizontal guide line
+    const hl=mk('line'); sa(hl,{x1:pd.l,x2:dotX,y1:dotY,y2:dotY,stroke:'rgba(255,208,0,.25)','stroke-dasharray':'4,3'}); svg.appendChild(hl);
+    // glowing star dot
+    const circle=mk('circle');
+    sa(circle,{cx:dotX,cy:dotY,r:'6',fill:'var(--c5)',filter:'url(#glow-c1)',stroke:'white','stroke-width':'1.5'});
+    svg.appendChild(circle);
+    // star label
+    const starLbl=mk('text');
+    sa(starLbl,{x:dotX+8,y:dotY-6,fill:'var(--c5)','font-size':'8','font-family':'var(--mono)','font-weight':'bold'});
+    starLbl.textContent=`★ YOUR RUN (n=${actualN}, ops=${actualCmp})`; svg.appendChild(starLbl);
+    // glow filter
+    const defs=mk('defs');
+    defs.innerHTML='<filter id="glow-c1"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>';
+    svg.insertBefore(defs, svg.firstChild);
+
+    // Update info bar
+    const info=document.getElementById('actual-info');
+    const norun=document.getElementById('no-run-info');
+    const txt=document.getElementById('actual-text');
+    if(info&&txt){
+      info.style.display='block';
+      if(norun) norun.style.display='none';
+      const algoName=algo==='graham'?'Graham Scan':'Jarvis March';
+      txt.textContent=`${algoName} on ${actualN} points → ${actualCmp} comparisons`;
+    }
+  } else {
+    const info=document.getElementById('actual-info');
+    const norun=document.getElementById('no-run-info');
+    if(info) info.style.display='none';
+    if(norun) norun.style.display='block';
+  }
+}
+
+// ── CLO-2 SORT DEMO ────────────────────────────────────────────
+function updSortDemo(){
+  const demo=document.getElementById('sdd');
+  demo.innerHTML='';
+  if(pts.length<3){ demo.innerHTML='<span style="font-family:var(--mono);font-size:.59rem;color:var(--txd);padding:8px">Load a preset to see polar angle visualization</span>'; return; }
+  let pi=0;
+  for(let i=1;i<pts.length;i++) if(pts[i].y>pts[pi].y||(pts[i].y===pts[pi].y&&pts[i].x<pts[pi].x)) pi=i;
+  const pv=pts[pi];
+  const nonPiv=pts.map((p,i)=>({i,a:pang(pv,p),isp:i===pi})).filter(a=>!a.isp).sort((a,b)=>a.a-b.a);
+  if(!nonPiv.length) return;
+  const minA=nonPiv[0].a, maxA=nonPiv[nonPiv.length-1].a, rng=maxA-minA||1;
+  nonPiv.forEach((a,si)=>{
+    const hp=0.18+(a.a-minA)/rng*0.76;
+    const bar=document.createElement('div');
+    bar.className='sbar';
+    bar.style.height=(hp*100)+'%';
+    bar.style.background=`hsl(${130+si*12},75%,55%)`;
+    bar.title=`P${a.i} — ${(a.a*180/Math.PI).toFixed(1)}°`;
+    bar.innerHTML=`<span>P${a.i}</span>`;
+    demo.appendChild(bar);
+  });
+  const pivBar=document.createElement('div');
+  pivBar.className='sbar';
+  pivBar.style.height='100%';
+  pivBar.style.background='var(--c4)';
+  pivBar.style.order='-1';
+  pivBar.title=`P${pi} — PIVOT`;
+  pivBar.innerHTML=`<span>P${pi}</span>`;
+  demo.appendChild(pivBar);
+}
+
+// ── OVERVIEW ───────────────────────────────────────────────────
+function updOverview(){
+  const el=document.getElementById('ovb');
+  if(algo==='graham'){
+    el.innerHTML=`
+<h4>WHAT IS GRAHAM SCAN?</h4>
+<p>Graham Scan (Ronald Graham, 1972) finds the <em>convex hull</em> of n 2D points in <strong>O(n log n)</strong> time. It is one of the most efficient convex hull algorithms and works by sorting points by polar angle then doing a single stack-based sweep.</p>
+
+<h4>REAL-WORLD ANALOGY</h4>
+<p>Imagine you have nails hammered into a board at random positions. Stretch a rubber band around all the nails and let it snap tight — the shape it forms is the <em>convex hull</em>. Graham Scan figures out which nails the rubber band touches.</p>
+
+<h4>THE 3 PHASES IN DETAIL</h4>
+<div class="ws"><div class="wsn">①</div><div class="wst"><strong>Find Anchor:</strong> Scan all n points for the one with the lowest y (then leftmost x if tied). This point is <em>always</em> on the hull — no point can be "below" it, so it can never be inside the polygon.</div></div>
+<div class="ws"><div class="wsn">②</div><div class="wst"><strong>Polar Sort:</strong> Sort all other points by their counter-clockwise angle from the anchor. Use atan2(dy, dx). Ties broken by distance. This takes <em>O(n log n)</em> — the bottleneck of the whole algorithm.</div></div>
+<div class="ws"><div class="wsn">③</div><div class="wst"><strong>Stack Sweep:</strong> Process sorted points one by one. For each new point p, check: do the last two stack points and p make a LEFT turn? If yes → push p. If no (right turn or collinear) → pop the top and check again. Each point is pushed and popped at most once → <em>O(n)</em> total.</div></div>
+
+<h4>THE CROSS PRODUCT TEST</h4>
+<p>To check turn direction for three points O, A, B:</p>
+<div class="ws"><div class="wsn">✕</div><div class="wst"><strong>cross(O,A,B) = (A.x−O.x)×(B.y−O.y) − (A.y−O.y)×(B.x−O.x)</strong><br>
+• Result &gt; 0 → Counter-clockwise (LEFT turn) ✓ keep<br>
+• Result &lt; 0 → Clockwise (RIGHT turn) ✗ pop<br>
+• Result = 0 → Collinear — pop (standard version)</div></div>
+
+<h4>WORKED EXAMPLE 1 — TRIANGLE</h4>
+<div class="ws"><div class="wsn">1</div><div class="wst">Points: P0(2,1) P1(5,5) P2(8,2). Anchor = <em>P0(2,1)</em> — lowest y.</div></div>
+<div class="ws"><div class="wsn">2</div><div class="wst">Polar angles from P0: P2 at ~−14°, P1 at ~53°. Sorted: [P2, P1]. Stack init: [P0, P2].</div></div>
+<div class="ws"><div class="wsn">3</div><div class="wst">Add P1: cross(P0,P2,P1) = (6)(4)−(1)(3) = 24−3 = <em>21 &gt; 0</em> → LEFT turn → push. Stack: [P0,P2,P1].</div></div>
+<div class="ws"><div class="wsn">4</div><div class="wst">Done. Hull = <em>P0 → P2 → P1</em>. All 3 points are on the hull (triangle).</div></div>
+<svg viewBox="0 0 260 130" style="width:100%;margin:6px 0;background:var(--bg);border:1px solid var(--bdr);border-radius:1px">
+  <line x1="40" y1="100" x2="200" y2="60" stroke="var(--c1)" stroke-width="2"/>
+  <line x1="200" y1="60" x2="160" y2="20" stroke="var(--c1)" stroke-width="2"/>
+  <line x1="160" y1="20" x2="40" y2="100" stroke="var(--c1)" stroke-width="2"/>
+  <polygon points="40,100 200,60 160,20" fill="rgba(0,204,255,0.07)"/>
+  <circle cx="40" cy="100" r="5" fill="var(--c4)"/><text x="22" y="115" fill="var(--c4)" font-size="9" font-family="monospace">P0(2,1)</text>
+  <circle cx="160" cy="20" r="5" fill="var(--ph)"/><text x="163" y="18" fill="var(--ph)" font-size="9" font-family="monospace">P1(5,5)</text>
+  <circle cx="200" cy="60" r="5" fill="var(--ph)"/><text x="203" y="58" fill="var(--ph)" font-size="9" font-family="monospace">P2(8,2)</text>
+  <text x="100" y="75" fill="var(--txd)" font-size="8" font-family="monospace">Hull = triangle</text>
+</svg>
+
+<h4>WORKED EXAMPLE 2 — INTERIOR POINT REMOVED</h4>
+<div class="ws"><div class="wsn">1</div><div class="wst">Points: P0(0,0) P1(3,1) P2(6,0) P3(3,4). Anchor = <em>P0</em>. Sorted by angle: P2, P1, P3.</div></div>
+<div class="ws"><div class="wsn">2</div><div class="wst">Stack: [P0,P2]. Add P1: cross(P0,P2,P1) = (6)(1)−(0)(3) = 6 &gt; 0 → push. Stack:[P0,P2,P1].</div></div>
+<div class="ws"><div class="wsn">3</div><div class="wst">Add P3: cross(P2,P1,P3) = (−3)(3)−(1)(0) = −9 &lt; 0 → <em>RIGHT turn — POP P1</em>. Stack:[P0,P2].</div></div>
+<div class="ws"><div class="wsn">4</div><div class="wst">cross(P0,P2,P3) = (6)(4)−(0)(3) = 24 &gt; 0 → LEFT → push P3. Stack:[P0,P2,P3]. Hull = <em>P0→P2→P3</em>. P1 is interior!</div></div>
+<svg viewBox="0 0 260 130" style="width:100%;margin:6px 0;background:var(--bg);border:1px solid var(--bdr);border-radius:1px">
+  <line x1="20" y1="110" x2="230" y2="110" stroke="var(--c1)" stroke-width="2"/>
+  <line x1="230" y1="110" x2="125" y2="20" stroke="var(--c1)" stroke-width="2"/>
+  <line x1="125" y1="20" x2="20" y2="110" stroke="var(--c1)" stroke-width="2"/>
+  <polygon points="20,110 230,110 125,20" fill="rgba(0,204,255,0.07)"/>
+  <circle cx="20"  cy="110" r="5" fill="var(--c4)"/><text x="4"   y="125" fill="var(--c4)" font-size="9" font-family="monospace">P0</text>
+  <circle cx="125" cy="75"  r="5" fill="var(--txd)"/><text x="128" y="73"  fill="var(--txd)" font-size="9" font-family="monospace">P1 (interior)</text>
+  <circle cx="230" cy="110" r="5" fill="var(--ph)"/><text x="215" y="125" fill="var(--ph)"  font-size="9" font-family="monospace">P2</text>
+  <circle cx="125" cy="20"  r="5" fill="var(--ph)"/><text x="128" y="18"  fill="var(--ph)"  font-size="9" font-family="monospace">P3</text>
+  <text x="80" y="100" fill="var(--txd)" font-size="8" font-family="monospace">P1 popped — right turn</text>
+</svg>
+
+<h4>COMPLEXITY BREAKDOWN</h4>
+<svg viewBox="0 0 260 110" style="width:100%;margin:6px 0;background:var(--bg);border:1px solid var(--bdr);border-radius:1px">
+  <text x="10" y="18" fill="var(--c1)" font-size="9" font-family="monospace">Phase</text>
+  <text x="120" y="18" fill="var(--c1)" font-size="9" font-family="monospace">Time</text>
+  <text x="190" y="18" fill="var(--c1)" font-size="9" font-family="monospace">Why</text>
+  <line x1="8" y1="22" x2="252" y2="22" stroke="var(--bhi)" stroke-width="1"/>
+  <text x="10" y="36" fill="var(--tx)" font-size="8" font-family="monospace">Find anchor</text><text x="120" y="36" fill="var(--c3)" font-size="8" font-family="monospace">O(n)</text><text x="190" y="36" fill="var(--txd)" font-size="8" font-family="monospace">single scan</text>
+  <text x="10" y="52" fill="var(--tx)" font-size="8" font-family="monospace">Polar sort</text><text x="120" y="52" fill="var(--c5)" font-size="8" font-family="monospace">O(n log n)</text><text x="190" y="52" fill="var(--txd)" font-size="8" font-family="monospace">comparison sort</text>
+  <text x="10" y="68" fill="var(--tx)" font-size="8" font-family="monospace">Stack sweep</text><text x="120" y="68" fill="var(--c3)" font-size="8" font-family="monospace">O(n)</text><text x="190" y="68" fill="var(--txd)" font-size="8" font-family="monospace">each pt push/pop once</text>
+  <line x1="8" y1="73" x2="252" y2="73" stroke="var(--bhi)" stroke-width="1"/>
+  <text x="10" y="87" fill="var(--tx)" font-size="8" font-family="monospace">TOTAL</text><text x="120" y="87" fill="var(--c1)" font-size="8" font-family="monospace" font-weight="bold">O(n log n)</text><text x="190" y="87" fill="var(--txd)" font-size="8" font-family="monospace">sort dominates</text>
+  <text x="10" y="103" fill="var(--tx)" font-size="8" font-family="monospace">Space</text><text x="120" y="103" fill="var(--c1)" font-size="8" font-family="monospace">O(n)</text><text x="190" y="103" fill="var(--txd)" font-size="8" font-family="monospace">stack storage</text>
+</svg>
+
+<div class="kcard b"><div class="kt">WHY THE SORT IS ESSENTIAL</div><div class="kb">Without polar sorting, the stack can't tell if a turn is locally or globally valid. You might keep a point that looks like a left turn now but creates a concave dent in the final hull. The sort guarantees we process points in one clean CCW sweep so each decision is final.</div></div>
+<div class="kcard or"><div class="kt">COMMON MISTAKES</div><div class="kb">1. Wrong anchor — using topmost instead of bottommost breaks the sort order.<br>2. Ignoring collinear points — cross=0 must be handled (pop or keep depending on requirements).<br>3. Not breaking ties by distance during sort — causes incorrect order for collinear points.</div></div>
+<div class="kcard p"><div class="kt">WHEN DOES GRAHAM SCAN WIN?</div><div class="kb">Always O(n log n) regardless of h. Best when most points are on the hull (h ≈ n). For a regular polygon with all n points on hull, Graham and Jarvis have the same total comparisons.</div></div>`;
+  } else {
+    el.innerHTML=`
+<h4>WHAT IS JARVIS MARCH?</h4>
+<p>Jarvis March (R.A. Jarvis, 1973), also called <em>Gift Wrapping</em>, finds the convex hull by starting at the leftmost point and repeatedly asking: "What is the most counterclockwise point I can see from here?" Time: <strong>O(nh)</strong> where h is the number of hull vertices.</p>
+
+<h4>REAL-WORLD ANALOGY</h4>
+<p>Imagine wrapping a gift with a strip of paper. You start at the bottom-left corner, pull the paper tight counterclockwise until it touches the next corner, staple it, then repeat all the way around. That's exactly what Jarvis March does — it "wraps" around the point set.</p>
+
+<h4>THE ALGORITHM STEP BY STEP</h4>
+<div class="ws"><div class="wsn">①</div><div class="wst"><strong>Find Start:</strong> Scan all n points for the leftmost (smallest x, then lowest y if tied). This point is guaranteed to be on the hull.</div></div>
+<div class="ws"><div class="wsn">②</div><div class="wst"><strong>Greedy Scan:</strong> From current hull point, scan ALL n points to find the one that is most counterclockwise. Use cross product: if cross(current, best, candidate) &lt; 0, then candidate is more CCW → update best.</div></div>
+<div class="ws"><div class="wsn">③</div><div class="wst"><strong>Advance:</strong> The best candidate becomes the next hull point. Add it to hull and repeat.</div></div>
+<div class="ws"><div class="wsn">④</div><div class="wst"><strong>Stop:</strong> When the next best point would be the starting point again — the hull is closed.</div></div>
+
+<h4>WORKED EXAMPLE 1 — SQUARE</h4>
+<div class="ws"><div class="wsn">1</div><div class="wst">Points: P0(0,0) P1(4,0) P2(4,4) P3(0,4) P4(2,2). Start = <em>P0(0,0)</em> — leftmost.</div></div>
+<div class="ws"><div class="wsn">2</div><div class="wst">From P0: scan all. cross(P0, P1, P2)&gt;0 so P1 stays over P2, P3, P4. Next = <em>P1</em>.</div></div>
+<div class="ws"><div class="wsn">3</div><div class="wst">From P1: scan all. Most CCW = <em>P2</em>. From P2: most CCW = <em>P3</em>. From P3: most CCW = <em>P0</em>. Hull closed!</div></div>
+<div class="ws"><div class="wsn">4</div><div class="wst">P4(2,2) is interior — never selected. Hull = <em>P0→P1→P2→P3</em>. Only 4×5=20 comparisons total.</div></div>
+<svg viewBox="0 0 260 140" style="width:100%;margin:6px 0;background:var(--bg);border:1px solid var(--bdr);border-radius:1px">
+  <rect x="40" y="20" width="120" height="100" fill="rgba(0,204,255,0.07)" stroke="var(--c1)" stroke-width="2"/>
+  <circle cx="40"  cy="120" r="6" fill="var(--c4)"/><text x="20" y="135" fill="var(--c4)"  font-size="9" font-family="monospace">P0</text>
+  <circle cx="160" cy="120" r="5" fill="var(--ph)"/><text x="163" y="135" fill="var(--ph)" font-size="9" font-family="monospace">P1</text>
+  <circle cx="160" cy="20"  r="5" fill="var(--ph)"/><text x="163" y="18"  fill="var(--ph)" font-size="9" font-family="monospace">P2</text>
+  <circle cx="40"  cy="20"  r="5" fill="var(--ph)"/><text x="20" y="18"   fill="var(--ph)" font-size="9" font-family="monospace">P3</text>
+  <circle cx="100" cy="70"  r="5" fill="var(--txd)"/><text x="103" y="68" fill="var(--txd)" font-size="9" font-family="monospace">P4 (interior)</text>
+  <text x="55" y="80" fill="var(--txd)" font-size="8" font-family="monospace">Gift wrap →</text>
+</svg>
+
+<h4>WORKED EXAMPLE 2 — PENTAGON WITH INTERIOR POINTS</h4>
+<div class="ws"><div class="wsn">1</div><div class="wst">10 random points. Only 5 form the outer pentagon. Jarvis scans 10 pts × 5 hull pts = <em>50 comparisons</em>.</div></div>
+<div class="ws"><div class="wsn">2</div><div class="wst">Graham Scan would take ~10×log₂(10) ≈ <em>33 comparisons</em> for the sort alone — slightly fewer here.</div></div>
+<div class="ws"><div class="wsn">3</div><div class="wst">But with only 3 hull pts and 1000 total pts: Jarvis = 3000 ops vs Graham = ~10000 ops. <em>Jarvis wins big!</em></div></div>
+<svg viewBox="0 0 260 130" style="width:100%;margin:6px 0;background:var(--bg);border:1px solid var(--bdr);border-radius:1px">
+  <polygon points="130,15 220,80 190,125 70,125 40,80" fill="rgba(0,204,255,0.07)" stroke="var(--c1)" stroke-width="2"/>
+  <circle cx="130" cy="15"  r="5" fill="var(--ph)"/>
+  <circle cx="220" cy="80"  r="5" fill="var(--ph)"/>
+  <circle cx="190" cy="125" r="5" fill="var(--ph)"/>
+  <circle cx="70"  cy="125" r="5" fill="var(--c4)"/>
+  <circle cx="40"  cy="80"  r="5" fill="var(--ph)"/>
+  <circle cx="110" cy="60"  r="4" fill="var(--txd)"/>
+  <circle cx="150" cy="75"  r="4" fill="var(--txd)"/>
+  <circle cx="130" cy="95"  r="4" fill="var(--txd)"/>
+  <circle cx="95"  cy="85"  r="4" fill="var(--txd)"/>
+  <circle cx="165" cy="55"  r="4" fill="var(--txd)"/>
+  <text x="55" y="115" fill="var(--c4)" font-size="8" font-family="monospace">start</text>
+  <text x="80" y="50" fill="var(--txd)" font-size="8" font-family="monospace">interior pts</text>
+</svg>
+
+<h4>COMPLEXITY BREAKDOWN</h4>
+<svg viewBox="0 0 260 95" style="width:100%;margin:6px 0;background:var(--bg);border:1px solid var(--bdr);border-radius:1px">
+  <text x="10" y="16" fill="var(--c2)" font-size="9" font-family="monospace">Scenario</text>
+  <text x="130" y="16" fill="var(--c2)" font-size="9" font-family="monospace">Comparisons</text>
+  <line x1="8" y1="20" x2="252" y2="20" stroke="var(--bhi)" stroke-width="1"/>
+  <text x="10" y="34" fill="var(--tx)"  font-size="8" font-family="monospace">h=3 (triangle hull)</text><text x="130" y="34" fill="var(--c3)" font-size="8" font-family="monospace">3n  ← very fast</text>
+  <text x="10" y="49" fill="var(--tx)"  font-size="8" font-family="monospace">h=log(n)</text><text x="130" y="49" fill="var(--c3)" font-size="8" font-family="monospace">n·log(n) ≈ Graham</text>
+  <text x="10" y="64" fill="var(--tx)"  font-size="8" font-family="monospace">h=√n</text><text x="130" y="64" fill="var(--c5)" font-size="8" font-family="monospace">n·√n  (moderate)</text>
+  <text x="10" y="79" fill="var(--tx)"  font-size="8" font-family="monospace">h=n (all on hull)</text><text x="130" y="79" fill="var(--c4)" font-size="8" font-family="monospace">n²  ← WORST CASE</text>
+</svg>
+
+<h4>GRAHAM vs JARVIS — WHEN TO USE WHICH</h4>
+<svg viewBox="0 0 260 80" style="width:100%;margin:6px 0;background:var(--bg);border:1px solid var(--bdr);border-radius:1px">
+  <text x="10" y="15" fill="var(--txd)" font-size="8" font-family="monospace">h (hull size) relative to n</text>
+  <line x1="10" y1="50" x2="250" y2="50" stroke="var(--bhi)" stroke-width="1"/>
+  <line x1="10" y1="20" x2="10"  y2="65" stroke="var(--bhi)" stroke-width="1"/>
+  <text x="12" y="62" fill="var(--c3)" font-size="8" font-family="monospace">h tiny</text>
+  <text x="100" y="62" fill="var(--c5)" font-size="8" font-family="monospace">h=log n</text>
+  <text x="190" y="62" fill="var(--c4)" font-size="8" font-family="monospace">h=n</text>
+  <rect x="10"  y="28" width="105" height="16" fill="rgba(255,96,48,.3)" rx="2"/>
+  <text x="15"  y="40" fill="var(--c2)" font-size="8" font-family="monospace">← JARVIS faster</text>
+  <rect x="115" y="28" width="135" height="16" fill="rgba(0,204,255,.2)" rx="2"/>
+  <text x="120" y="40" fill="var(--c1)" font-size="8" font-family="monospace">GRAHAM faster →</text>
+</svg>
+
+<div class="kcard g"><div class="kt">WHY GREEDY WORKS</div><div class="kb">The key insight: the most-CCW point from any hull vertex is always the correct next hull vertex. No future information can make a different choice better. This is the greedy choice property — once we pick the most-CCW point, that decision is globally optimal.</div></div>
+<div class="kcard or"><div class="kt">COMMON MISTAKES</div><div class="kb">1. Using collinear tie-breaking incorrectly — if three points are collinear, the one farthest away should be picked.<br>2. Infinite loop — if the cross product comparison uses ≤ instead of &lt;, collinear points can cause the algorithm to loop forever.<br>3. Wrong starting point — must be the absolute leftmost, not just any boundary point.</div></div>
+<div class="kcard au"><div class="kt">WHEN DOES JARVIS WIN?</div><div class="kb">When h ≪ n. Classic example: 1 million random points inside a unit circle — the hull has O(√n) ≈ 1000 points. Jarvis does ~10⁹ ops (fast), Graham does ~2×10⁷ ops (also fast but more). For a cloud of points around a triangle (h=3), Jarvis is 3× faster than Graham.</div></div>`;
+  }
+}
+
+// ── INIT (everything wired here, after DOM is ready) ───────────
+window.addEventListener('load', function(){
+  buildPseudo();
+  updOverview();
+
+  // wire buttons
+  document.getElementById('bbs').addEventListener('click', buildSteps);
+  document.getElementById('bst').addEventListener('click', stepFwd);
+  document.getElementById('bpl').addEventListener('click', doPlay);
+  document.getElementById('bpa').addEventListener('click', doPause);
+  document.getElementById('brs').addEventListener('click', doReset);
+  document.getElementById('bpa').disabled = true;
+  document.getElementById('bac').addEventListener('click', applyCustom);
+
+  // speed slider
+  document.getElementById('spsl').addEventListener('input', function(){ setSpd(this.value); });
+
+  // n slider (CLO-1)
+  document.getElementById('nsl').addEventListener('input', function(){
+    document.getElementById('nv').textContent = this.value;
+    drawC1Chart(parseInt(this.value));
+  });
+
+  // algo tabs
+  document.getElementById('tg').addEventListener('click', ()=>swAlgo('graham'));
+  document.getElementById('tj').addEventListener('click', ()=>swAlgo('jarvis'));
+
+  // preset buttons
+  document.querySelectorAll('.pb[data-pre]').forEach(btn=>{
+    btn.addEventListener('click', ()=>loadPre(btn.dataset.pre));
+  });
+
+  // bottom tabs
+  document.querySelectorAll('.btab[data-tab]').forEach(btn=>{
+    btn.addEventListener('click', ()=>sBTab(btn.dataset.tab, btn));
+  });
+
+  // section toggles
+  document.querySelectorAll('.stitle').forEach(el=>{
+    el.addEventListener('click', ()=>togSec(el));
+  });
+
+  // tooltip mousemove
+  document.addEventListener('mousemove', moveTT);
+
+  // canvas click — add point
+  document.getElementById('vsvg').addEventListener('click', function(e){
+    const r=this.getBoundingClientRect();
+    pts.push({x:e.clientX-r.left, y:e.clientY-r.top});
+    steps=[]; cur=-1; updCtr(); render(-1); updSortDemo();
+    document.getElementById('vnote').style.display='none';
+  });
+
+  // resize
+  window.addEventListener('resize', function(){
+    initSVG(); render(cur);
+    drawC1Chart(parseInt(document.getElementById('nsl').value));
+  });
+
+  // ── RESIZERS ──────────────────────────────────────────────────
+  // Vertical resizer (left panel width)
+  (function(){
+    const vres=document.getElementById('vres');
+    const left=document.querySelector('.left');
+    let dragging=false, startX=0, startW=0;
+    vres.addEventListener('mousedown',function(e){
+      dragging=true; startX=e.clientX; startW=left.offsetWidth;
+      vres.classList.add('dragging');
+      document.body.style.cursor='col-resize';
+      document.body.style.userSelect='none';
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove',function(e){
+      if(!dragging) return;
+      const newW=Math.max(220, Math.min(600, startW+(e.clientX-startX)));
+      left.style.width=newW+'px';
+    });
+    document.addEventListener('mouseup',function(){
+      if(!dragging) return;
+      dragging=false; vres.classList.remove('dragging');
+      document.body.style.cursor=''; document.body.style.userSelect='';
+      initSVG(); render(cur);
+    });
+    // touch support
+    vres.addEventListener('touchstart',function(e){
+      dragging=true; startX=e.touches[0].clientX; startW=left.offsetWidth;
+      e.preventDefault();
+    },{passive:false});
+    document.addEventListener('touchmove',function(e){
+      if(!dragging) return;
+      const newW=Math.max(220,Math.min(600,startW+(e.touches[0].clientX-startX)));
+      left.style.width=newW+'px';
+    });
+    document.addEventListener('touchend',function(){
+      if(!dragging) return;
+      dragging=false; initSVG(); render(cur);
+    });
+  })();
+
+  // Horizontal resizer (bottom panel height)
+  (function(){
+    const hres=document.getElementById('hres');
+    const bpanel=document.querySelector('.bpanel');
+    const right=document.querySelector('.right');
+    let dragging=false, startY=0, startH=0;
+    hres.addEventListener('mousedown',function(e){
+      dragging=true; startY=e.clientY; startH=bpanel.offsetHeight;
+      hres.classList.add('dragging');
+      document.body.style.cursor='row-resize';
+      document.body.style.userSelect='none';
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove',function(e){
+      if(!dragging) return;
+      const delta=startY-e.clientY; // drag up = bigger panel
+      const newH=Math.max(60, Math.min(right.offsetHeight-100, startH+delta));
+      bpanel.style.height=newH+'px';
+    });
+    document.addEventListener('mouseup',function(){
+      if(!dragging) return;
+      dragging=false; hres.classList.remove('dragging');
+      document.body.style.cursor=''; document.body.style.userSelect='';
+      initSVG(); render(cur);
+    });
+    // touch support
+    hres.addEventListener('touchstart',function(e){
+      dragging=true; startY=e.touches[0].clientY; startH=bpanel.offsetHeight;
+      e.preventDefault();
+    },{passive:false});
+    document.addEventListener('touchmove',function(e){
+      if(!dragging) return;
+      const delta=startY-e.touches[0].clientY;
+      const newH=Math.max(60,Math.min(right.offsetHeight-100,startH+delta));
+      bpanel.style.height=newH+'px';
+    });
+    document.addEventListener('touchend',function(){
+      if(!dragging) return;
+      dragging=false; initSVG(); render(cur);
+    });
+  })();
+  setTimeout(function(){
+    initSVG();
+    loadPre('random');
+    drawC1Chart(60);
+    // default to overview tab
+    const ovBtn=document.querySelector('.btab[data-tab="overview"]');
+    if(ovBtn) sBTab('overview', ovBtn);
+  }, 50);
+});
+
+})(); // end IIFE
+</script>
+</body>
+</html>
